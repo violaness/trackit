@@ -1,0 +1,1549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Dosing Rhythm</title>
+<link id="favicon" rel="icon" href="">
+<link id="apple-icon" rel="apple-touch-icon" href="">
+<script>
+(function () {
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">' +
+    '<rect width="512" height="512" rx="112" fill="#E2E2DB"/>' +
+    '<circle cx="196" cy="256" r="92" fill="#BBBB9A"/>' +
+    '<circle cx="336" cy="256" r="66" fill="#9AAEA3"/>' +
+    '</svg>';
+  var svgUrl = "data:image/svg+xml;base64," + btoa(svg);
+  var img = new Image();
+  img.onload = function () {
+    var canvas = document.createElement("canvas");
+    canvas.width = 180;
+    canvas.height = 180;
+    canvas.getContext("2d").drawImage(img, 0, 0, 180, 180);
+    var pngUrl = canvas.toDataURL("image/png");
+    document.getElementById("favicon").setAttribute("href", pngUrl);
+    document.getElementById("apple-icon").setAttribute("href", pngUrl);
+  };
+  img.src = svgUrl;
+})();
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #E2E2DB;
+    --ink: #3F5039;
+    --card: #F1F1EC;
+    --line: #D3DAD3;
+    --muted: #6B7A66;
+    --rose: #59705B;
+    --slate: #9AAEA3;
+    --sage: #BBBB9A;
+    --terracotta: #C1654A;
+    --dim: #C9C9B9;
+  }
+  * { box-sizing: border-box; }
+  button { font-family: inherit; color: inherit; -webkit-appearance: none; appearance: none; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .display { font-family: 'Special Elite', monospace; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 32px 20px 96px; }
+  .eyebrow { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--rose); margin: 0; }
+  h1 { font-size: 28px; font-weight: 600; margin: 4px 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .hero { padding: 24px; margin-bottom: 32px; }
+  .hero-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .badge { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 10px; border-radius: 999px; }
+  .hero-name { font-size: 22px; font-weight: 600; margin: 0; }
+  .hero-primary { font-size: 36px; font-weight: 500; margin: 10px 0 2px; }
+  .hero-secondary { font-size: 14px; color: var(--muted); margin: 0; }
+  .btn { border: none; border-radius: 12px; padding: 13px; font-size: 14px; font-weight: 500; cursor: pointer; width: 100%; color: #fff; margin-top: 18px; }
+  .section { margin-bottom: 24px; }
+  .section-title { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px; padding: 0 2px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--line); background: var(--card); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+  .row-name { font-size: 14px; font-weight: 500; margin: 0; }
+  .row-sub { font-size: 12px; margin: 2px 0 0; }
+  .row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .icon-btn { border: none; border-radius: 999px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .add-toggle { width: 100%; border: 1px solid var(--line); background: var(--card); border-radius: 12px; padding: 13px; font-size: 14px; font-weight: 500; cursor: pointer; }
+  .form-card { display: flex; flex-direction: column; gap: 14px; }
+  .type-row, .mode-row { display: flex; gap: 8px; }
+  .toggle-btn { flex: 1; border: 1px solid var(--line); background: transparent; border-radius: 8px; padding: 8px; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--ink); text-transform: capitalize; }
+  .toggle-btn.active { border-color: var(--rose); background: #E4E9E2; }
+  input[type="text"], input[type="number"], input[type="date"], input[type="time"] {
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font-size: 14px; font-family: inherit; outline: none; background: #fff; color: var(--ink);
+  }
+  .full { width: 100%; }
+  .field-row { display: flex; align-items: center; justify-content: space-between; }
+  .field-label { font-size: 12px; color: var(--muted); }
+  .weekday-grid { display: flex; gap: 6px; }
+  .weekday-grid button { flex: 1; padding: 8px 0; font-size: 12px; }
+  .day-time-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .interval-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .interval-row input { width: 64px; }
+  .form-actions { display: flex; gap: 8px; }
+  .form-actions button { flex: 1; border-radius: 8px; padding: 10px; font-size: 14px; font-weight: 500; cursor: pointer; }
+  .btn-cancel { border: 1px solid var(--line); background: transparent; color: var(--ink); }
+  .btn-submit { border: none; background: var(--ink); color: #fff; }
+  .error-text { font-size: 12px; color: var(--terracotta); text-align: center; margin: 0; }
+  .empty { text-align: center; padding: 24px; }
+  .empty p:first-child { font-size: 17px; margin: 0 0 4px; }
+  .empty p:last-child { font-size: 13px; color: var(--muted); margin: 0; }
+  .backup-link { background: none; border: none; color: var(--muted); font-size: 12px; text-decoration: underline; cursor: pointer; padding: 0; margin-bottom: 20px; }
+  .tabs { display: flex; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px; margin-bottom: 20px; }
+  .tab-btn { flex: 1; border: none; background: none; border-radius: 9px; padding: 9px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--muted); }
+  .tab-btn.active { background: var(--ink); color: #fff; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(43,37,48,0.45); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 100; }
+  .modal-card { background: var(--card); border-radius: 16px; padding: 24px; max-width: 360px; width: 100%; }
+  .modal-title { font-size: 20px; font-weight: 700; margin: 0 0 10px; }
+  .modal-desc { font-size: 13px; color: var(--muted); margin: 0 0 18px; line-height: 1.5; }
+  .modal-btn { width: 100%; border: none; border-radius: 10px; padding: 13px; font-size: 14px; font-weight: 600; color: #fff; cursor: pointer; margin-bottom: 10px; }
+  .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding: 0 2px; }
+  .cal-nav { background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer; padding: 2px 12px; line-height: 1; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .cal-weekdays { margin-bottom: 4px; }
+  .cal-wd { text-align: center; font-size: 10px; color: var(--muted); text-transform: uppercase; }
+  .cal-cell { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; }
+  .cal-cell.today { background: #E4E9E2; }
+  .cal-cell.empty-day { visibility: hidden; }
+  .cal-day-num { font-size: 11px; }
+  .cal-dots { display: flex; gap: 3px; margin-top: 2px; height: 9px; }
+  .cal-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .cal-legend { display: flex; gap: 14px; margin-top: 12px; font-size: 11px; color: var(--muted); align-items: center; flex-wrap: wrap; }
+  .cal-legend .cal-dot { margin-right: 4px; }
+  .day-chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .day-chip { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-family: 'IBM Plex Mono', monospace; color: var(--muted); padding: 0; }
+  .ring-wrap { margin-top: 16px; }
+  .ring { position: relative; width: 270px; height: 270px; margin: 0 auto; }
+  .ring-day { position: absolute; width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--line); transform: translate(-50%, -50%); font-size: 11px; font-family: 'IBM Plex Mono', monospace; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; background: #fff; }
+  .ring-day:disabled { cursor: default; }
+  .ring-label { position: absolute; transform: translate(-50%, -50%); font-size: 10px; color: var(--dim); font-family: 'IBM Plex Mono', monospace; }
+  .ring-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 140px; }
+  .ring-center-label { font-size: 10px; color: var(--muted); margin: 0; text-transform: uppercase; letter-spacing: 0.06em; }
+  .ring-center-date { font-size: 24px; font-weight: 600; margin: 3px 0; }
+  .ring-center-sub { font-size: 12px; color: var(--sage); margin: 0; }
+  .ring-stats { display: flex; border: 1px solid var(--line); border-radius: 12px; margin-top: 16px; overflow: hidden; }
+  .ring-stats > div { flex: 1; text-align: center; padding: 10px; }
+  .ring-stats > div:first-child { border-right: 1px solid var(--line); }
+  .ring-stat-num { font-size: 18px; font-weight: 600; margin: 0; }
+  .ring-stat-label { font-size: 10px; color: var(--muted); margin: 2px 0 0; text-transform: uppercase; letter-spacing: 0.04em; }
+  .ring2-dot { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); }
+  .ring2-label { position: absolute; transform: translate(-50%, -50%); font-size: 10px; color: var(--dim); font-family: 'IBM Plex Mono', monospace; }
+  .ring2-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<input type="file" id="restore-input" accept="application/json" style="display:none" onchange="handleRestoreFile(this)" />
+
+<script>
+window.addEventListener("error", function (e) {
+  var app = document.getElementById("app");
+  if (app && !app.dataset.crashed) {
+    app.dataset.crashed = "1";
+    app.innerHTML = '<div class="card empty" style="margin-top:32px;"><p class="display">Something went wrong loading the tracker</p><p>Try reloading the page. If you\'re previewing this inside Claude, open the hosted GitHub Pages link in your phone\'s browser instead — some browser features it needs aren\'t available inside Claude\'s preview.</p></div>';
+  }
+});
+
+var memoryStore = {};
+var storageAvailable = (function () {
+  try {
+    var t = "__storage_test__";
+    window.localStorage.setItem(t, t);
+    window.localStorage.removeItem(t);
+    return true;
+  } catch (e) {
+    return false;
+  }
+})();
+function storageGet(key) {
+  try {
+    if (storageAvailable) return window.localStorage.getItem(key);
+  } catch (e) {}
+  return Object.prototype.hasOwnProperty.call(memoryStore, key) ? memoryStore[key] : null;
+}
+function storageSet(key, value) {
+  try {
+    if (storageAvailable) {
+      window.localStorage.setItem(key, value);
+      return;
+    }
+  } catch (e) {}
+  memoryStore[key] = value;
+}
+
+const DAY = 24 * 60 * 60 * 1000;
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const STORAGE_KEY = "hrt-tracker-items";
+
+let items = [];
+let periods = [];
+let history = [];
+try { periods = JSON.parse(storageGet("hrt-tracker-periods") || "[]"); } catch (e) { periods = []; }
+function savePeriods() {
+  try { storageSet("hrt-tracker-periods", JSON.stringify(periods)); } catch (e) {}
+}
+try { history = JSON.parse(storageGet("hrt-tracker-history") || "[]"); } catch (e) { history = []; }
+function saveHistory() {
+  try { storageSet("hrt-tracker-history", JSON.stringify(history)); } catch (e) {}
+}
+try { items = JSON.parse(storageGet(STORAGE_KEY) || "[]"); } catch (e) { items = []; }
+
+function localDateKey(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function toDatetimeInputValue(ts) {
+  const d = new Date(ts);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+let calendarOffset = 0;
+let patchCycleOffset = 0;
+let editingCycleId = null;
+let editingDurationFor = null;
+let periodRingOffset = 0;
+let activeTab = "tracker";
+let appTitle = storageGet("hrt-tracker-title") || "Keeping You Level";
+let editingTitle = false;
+let editingId = null;
+let editingNameId = null;
+let showAdd = false;
+let showBackup = false;
+let formError = "";
+let form = defaultForm("patch");
+
+function defaultForm(type) {
+  return {
+    type,
+    name: "",
+    mode: type === "patch" ? "weekdays" : "cycle",
+    frequencyDays: type === "patch" ? 3.5 : 1,
+    weekdays: [],
+    weekdayTimeMap: {},
+    cycleLength: 28,
+    cycleStart: new Date().toISOString().slice(0, 10),
+    pillStartDay: 15,
+    pillDuration: 12,
+    pillTime: "20:00",
+  };
+}
+
+function save() {
+  try { storageSet(STORAGE_KEY, JSON.stringify(items)); } catch (e) {}
+}
+
+function uid() { return Math.random().toString(36).slice(2, 10); }
+
+
+function startOfDay(ts) { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); }
+function dateOnlyStr(ts) { return new Date(ts).toDateString(); }
+
+function formatWhen(ts) {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+function formatDateShort(ts) {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+function formatCountdown(ms) {
+  const abs = Math.abs(ms);
+  const days = Math.floor(abs / DAY);
+  const hours = Math.floor((abs % DAY) / (60 * 60 * 1000));
+  const mins = Math.floor((abs % (60 * 60 * 1000)) / (60 * 1000));
+  const suffix = ms < 0 ? " overdue" : "";
+  if (days > 0) return `${days}d ${hours}h${suffix}`;
+  if (hours > 0) return `${hours}h ${mins}m${suffix}`;
+  return `${mins}m${suffix}`;
+}
+function pillTimeOffset(time) {
+  if (!time) return 9 * 60 * 60 * 1000;
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 * 60 * 1000 + m * 60 * 1000;
+}
+
+function getInfo(item, now) {
+  if (item.scheduleType === "interval") {
+    if (!item.lastDone) return { state: "unset", sortTs: -Infinity };
+    const due = new Date(item.lastDone).getTime() + item.frequencyDays * DAY;
+    const state = due <= now ? "overdue" : due - now < DAY ? "today" : "upcoming";
+    return { state, dueTs: due, sortTs: due };
+  }
+  if (item.scheduleType === "weekdays") {
+    const todayStart = startOfDay(now);
+    const lastDoneDayStart = item.lastDone ? startOfDay(new Date(item.lastDone).getTime()) : null;
+
+    let searchStart = todayStart;
+
+    if (lastDoneDayStart !== null) {
+      // Find the most recent scheduled occurrence at or before now.
+      let recentDue = null;
+      for (let offset = 0; offset <= 13; offset++) {
+        const dayStart = todayStart - offset * DAY;
+        const wd = new Date(dayStart).getDay();
+        const entry = item.weekdaySchedule.find((s) => s.day === wd);
+        if (entry) {
+          const [h, m] = entry.time.split(":").map(Number);
+          const ts = dayStart + h * 60 * 60 * 1000 + m * 60 * 1000;
+          if (ts <= now) { recentDue = { ts, dayStart }; break; }
+        }
+      }
+      // If that occurrence hasn't been confirmed yet, it stays due — don't skip past it.
+      if (recentDue && lastDoneDayStart < recentDue.dayStart) {
+        const state = "overdue";
+        return { state, dueTs: recentDue.ts, sortTs: recentDue.ts };
+      }
+      if (recentDue) searchStart = recentDue.dayStart + DAY;
+    }
+
+    let due = null;
+    for (let offset = 0; offset < 14; offset++) {
+      const dayStart = searchStart + offset * DAY;
+      const wd = new Date(dayStart).getDay();
+      const entry = item.weekdaySchedule.find((s) => s.day === wd);
+      if (entry) {
+        const [h, m] = entry.time.split(":").map(Number);
+        due = dayStart + h * 60 * 60 * 1000 + m * 60 * 1000;
+        break;
+      }
+    }
+    if (due === null) return { state: "unset", sortTs: -Infinity };
+    const state = due <= now ? "overdue" : due - now < DAY ? "today" : "upcoming";
+    return { state, dueTs: due, sortTs: due };
+  }
+  if (item.scheduleType === "cycle") {
+    const start = startOfDay(item.cycleStart);
+    const daysSince = Math.floor((startOfDay(now) - start) / DAY);
+    const cycleLength = item.cycleLength;
+    const daysIntoCycle = ((daysSince % cycleLength) + cycleLength) % cycleLength;
+    const cycleAnchorTs = startOfDay(now) - daysIntoCycle * DAY;
+    const cycleDay = daysIntoCycle + 1;
+    const windowStart = item.pillStartDay;
+    const windowEnd = item.pillStartDay + item.pillDuration - 1;
+    const windowStartTs = cycleAnchorTs + (windowStart - 1) * DAY;
+    const windowEndTs = cycleAnchorTs + (windowEnd - 1) * DAY;
+
+    const nominalInWindow = cycleDay >= windowStart && cycleDay <= windowEnd;
+    const windowStartKey = localDateKey(windowStartTs);
+    const todayKey = localDateKey(now);
+    const dosesSoFar = history.filter((h) => h.itemId === item.id && h.date >= windowStartKey && h.date <= todayKey).length;
+    const runningBehind = !nominalInWindow && cycleDay > windowEnd && cycleDay < windowEnd + 14 && dosesSoFar < item.pillDuration;
+    const inWindow = nominalInWindow || runningBehind;
+
+    if (inWindow) {
+      const takenToday = item.lastDone && dateOnlyStr(item.lastDone) === dateOnlyStr(now);
+      return { state: "active", courseDay: cycleDay - windowStart + 1, windowEndTs, takenToday, extended: runningBehind, dosesSoFar, sortTs: -1 };
+    }
+    const nextStartTs = (cycleDay < windowStart
+      ? cycleAnchorTs + (windowStart - 1) * DAY
+      : cycleAnchorTs + cycleLength * DAY + (windowStart - 1) * DAY) + pillTimeOffset(item.pillTime);
+    return { state: "waiting", nextStartTs, sortTs: nextStartTs };
+  }
+  return { state: "unset", sortTs: -Infinity };
+}
+
+function periodStart(p) { return typeof p === "string" ? p : p.start; }
+function periodDuration(p) { return typeof p === "string" ? null : p.duration; }
+
+function cycleLengthsChrono() {
+  const sortedAsc = [...periods].sort((a, b) => new Date(periodStart(a)) - new Date(periodStart(b)));
+  const lengths = [];
+  for (let i = 1; i < sortedAsc.length; i++) {
+    lengths.push(Math.round((new Date(periodStart(sortedAsc[i])) - new Date(periodStart(sortedAsc[i - 1]))) / DAY));
+  }
+  return lengths;
+}
+
+function buildCycleChartSvg(lengths) {
+  const w = 320, h = 130, pad = 24;
+  if (lengths.length === 0) {
+    return `<p style="font-size:12px;color:var(--muted);text-align:center;padding:20px 0;">Log at least two periods to see your cycle length chart.</p>`;
+  }
+  const minV = Math.min(...lengths);
+  const maxV = Math.max(...lengths);
+  const range = maxV - minV || 1;
+  const avg = Math.round(lengths.reduce((a, b) => a + b, 0) / lengths.length);
+  const xStep = lengths.length > 1 ? (w - 2 * pad) / (lengths.length - 1) : 0;
+  const yOf = (v) => h - pad - ((v - minV) / range) * (h - 2 * pad);
+  const points = lengths.map((v, i) => `${pad + i * xStep},${yOf(v)}`).join(" ");
+  const dots = lengths.map((v, i) => `<circle cx="${pad + i * xStep}" cy="${yOf(v)}" r="3" fill="#BBBB9A" />`).join("");
+  const avgY = yOf(avg);
+
+  return `
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:130px;">
+      <line x1="${pad}" y1="${avgY}" x2="${w - pad}" y2="${avgY}" stroke="#59705B" stroke-width="1.5" stroke-dasharray="5 4" />
+      <text x="${w - pad}" y="${avgY - 6}" font-size="11" fill="#59705B" text-anchor="end" font-family="IBM Plex Mono, monospace">${avg}d avg</text>
+      <polyline points="${points}" fill="none" stroke="#BBBB9A" stroke-width="2" />
+      ${dots}
+    </svg>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;padding:0 2px;">
+      <span>Min: ${minV}d</span><span>Max: ${maxV}d</span>
+    </div>
+  `;
+}
+
+function changePeriodMonth(delta) {
+  periodRingOffset += delta;
+  render();
+}
+
+function togglePeriodDay(ts) {
+  const key = localDateKey(ts);
+  const idx = periods.findIndex((p) => localDateKey(new Date(periodStart(p)).getTime()) === key);
+  if (idx !== -1) {
+    periods.splice(idx, 1);
+  } else {
+    periods.push({ start: new Date(ts).toISOString(), duration: null });
+  }
+  savePeriods();
+  render();
+}
+
+function periodRingHtml(now) {
+  const base = new Date(now);
+  base.setDate(1);
+  base.setMonth(base.getMonth() + periodRingOffset);
+  const year = base.getFullYear();
+  const month = base.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayDate = periodRingOffset === 0 ? new Date(now).getDate() : null;
+  const monthLabel = base.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const size = 300, center = size / 2, R = 112;
+
+  const sortedDesc = [...periods].sort((a, b) => new Date(periodStart(b)) - new Date(periodStart(a)));
+  const lastStart = sortedDesc[0] ? new Date(periodStart(sortedDesc[0])).getTime() : null;
+  const lengths = cycleLengthsChrono();
+  const avgLength = lengths.length > 0 ? Math.round(lengths.reduce((a, b) => a + b, 0) / lengths.length) : null;
+  const loggedThisMonth = periods.filter((p) => {
+    const d2 = new Date(periodStart(p));
+    return d2.getFullYear() === year && d2.getMonth() === month;
+  }).length;
+
+  let nodes = "";
+  for (let day = 1; day <= daysInMonth; day++) {
+    const angle = ((day - 1) / daysInMonth) * 360 - 90;
+    const rad = (angle * Math.PI) / 180;
+    const x = center + R * Math.cos(rad);
+    const y = center + R * Math.sin(rad);
+    const dayStart = new Date(year, month, day).getTime();
+    const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const isStart = periods.some((p) => localDateKey(new Date(periodStart(p)).getTime()) === key);
+    const inSpan = !isStart && periods.some((p) => {
+      const dur = periodDuration(p);
+      if (!dur) return false;
+      const pStart = startOfDay(new Date(periodStart(p)).getTime());
+      const pEnd = pStart + (dur - 1) * DAY;
+      return dayStart >= pStart && dayStart <= pEnd;
+    });
+    const isFuture = dayStart > now;
+    const isToday = day === todayDate;
+
+    if (isStart) {
+      nodes += `<button class="ring-day" style="left:${x}px;top:${y}px;background:var(--sage);border-color:var(--sage);color:#fff;" onclick="togglePeriodDay(${dayStart})">✓</button>`;
+    } else if (inSpan) {
+      nodes += `<span class="ring-day" style="left:${x}px;top:${y}px;background:#BBBB9A80;border-color:transparent;color:#fff;display:flex;align-items:center;justify-content:center;position:absolute;width:28px;height:28px;border-radius:50%;transform:translate(-50%,-50%);font-size:11px;">${day}</span>`;
+    } else if (isFuture) {
+      nodes += `<span class="ring-label" style="left:${x}px;top:${y}px;">${day}</span>`;
+    } else {
+      nodes += `<button class="ring-day" style="left:${x}px;top:${y}px;background:#fff;border-color:var(--line);color:var(--muted);${isToday ? "font-weight:700;" : ""}" onclick="togglePeriodDay(${dayStart})">${day}</button>`;
+    }
+  }
+
+  let centerLabel, centerDate, centerSub;
+  if (periodRingOffset === 0) {
+    centerLabel = "Today";
+    centerDate = new Date(now).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    centerSub = lastStart ? `Day ${Math.floor((startOfDay(now) - startOfDay(lastStart)) / DAY) + 1}` : "Not logged yet";
+  } else {
+    centerLabel = monthLabel.split(" ")[0];
+    centerDate = year;
+    centerSub = loggedThisMonth > 0 ? `${loggedThisMonth} logged` : "Nothing logged";
+  }
+
+  return `
+    <div class="ring-wrap">
+      <div class="cal-header" style="max-width:300px;margin:0 auto 4px;">
+        <button class="cal-nav" onclick="changePeriodMonth(-1)" aria-label="Previous month">‹</button>
+        <p class="section-title" style="margin:0;">${monthLabel}</p>
+        <button class="cal-nav" onclick="changePeriodMonth(1)" aria-label="Next month">›</button>
+      </div>
+      <div class="ring" style="width:${size}px;height:${size}px;">
+        ${nodes}
+        <div class="ring-center">
+          <p class="ring-center-label">${centerLabel}</p>
+          <p class="ring-center-date display">${centerDate}</p>
+          <p class="ring-center-sub">${centerSub}</p>
+        </div>
+      </div>
+      <div class="ring-stats">
+        <div><p class="ring-stat-num mono">${loggedThisMonth}</p><p class="ring-stat-label">This month</p></div>
+        <div><p class="ring-stat-num mono">${avgLength || "–"}</p><p class="ring-stat-label">Avg cycle</p></div>
+      </div>
+    </div>
+  `;
+}
+
+function periodTabHtml(now) {
+  const sortedDesc = [...periods].sort((a, b) => new Date(periodStart(b)) - new Date(periodStart(a)));
+  const lengths = cycleLengthsChrono();
+
+  const rows = sortedDesc.map((p, i) => {
+    const start = periodStart(p);
+    const dur = periodDuration(p);
+    const cycle = i === sortedDesc.length - 1 ? "N/A" : Math.round((new Date(periodStart(sortedDesc[i])) - new Date(periodStart(sortedDesc[i + 1]))) / DAY) + "d";
+    return `
+      <div class="row">
+        <div style="min-width:0;">
+          <p class="row-name">${formatDateShort(new Date(start).getTime())}</p>
+          <p class="row-sub mono" style="color:var(--muted);">${dur ? dur + "d duration" : "duration not set"} · cycle ${cycle}</p>
+        </div>
+        <div class="row-actions">
+          <button class="icon-btn" style="background:#BBBB9A1A;color:var(--sage);" onclick="openEditDuration('${start}')" aria-label="Edit duration">✎</button>
+          <button class="icon-btn" style="color:var(--dim);" onclick="removePeriod('${start}')" aria-label="Remove">✕</button>
+        </div>
+      </div>
+      ${editingDurationFor === start ? `
+        <div class="row" style="background:#E4E9E2;flex-direction:column;align-items:stretch;gap:8px;">
+          <div class="field-row">
+            <span class="field-label">Days it lasted</span>
+            <input type="number" id="duration-input" min="1" value="${dur || ""}" style="width:64px;" />
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-cancel" style="flex:1;border-radius:8px;padding:8px;font-size:12px;" onclick="cancelEditDuration()">Cancel</button>
+            <button class="btn-submit" style="flex:1;border-radius:8px;padding:8px;font-size:12px;" onclick="saveEditDuration('${start}')">Save</button>
+          </div>
+        </div>
+      ` : ""}
+    `;
+  }).join("");
+
+  return `
+    <div class="card" style="margin-bottom:20px;">
+      ${periodRingHtml(now)}
+      <button class="btn" style="background:var(--sage);margin-top:16px;" onclick="logPeriod()">Log period started today</button>
+    </div>
+    <div class="section">
+      <p class="section-title" style="color:var(--sage);">Cycle length</p>
+      <div class="card">${buildCycleChartSvg(lengths)}</div>
+    </div>
+    <div class="section">
+      <p class="section-title" style="color:var(--sage);">History</p>
+      ${rows || `<p style="font-size:13px;color:var(--muted);padding:0 2px;">Nothing logged yet.</p>`}
+    </div>
+  `;
+}
+
+function logPeriod() {
+  const today = new Date().toDateString();
+  if (periods.some((p) => new Date(periodStart(p)).toDateString() === today)) { render(); return; }
+  periods.push({ start: new Date().toISOString(), duration: null });
+  savePeriods();
+  render();
+}
+
+function openEditDuration(start) {
+  editingDurationFor = start;
+  render();
+}
+
+function cancelEditDuration() {
+  editingDurationFor = null;
+  render();
+}
+
+function saveEditDuration(start) {
+  const input = document.getElementById("duration-input");
+  const raw = input ? input.value.trim() : "";
+  const duration = raw !== "" && !isNaN(Number(raw)) && Number(raw) > 0 ? Number(raw) : null;
+  periods = periods.map((p) => periodStart(p) === start ? { start, duration } : p);
+  savePeriods();
+  editingDurationFor = null;
+  render();
+}
+
+function removePeriod(start) {
+  periods = periods.filter((p) => periodStart(p) !== start);
+  savePeriods();
+  render();
+}
+
+function backupModalHtml() {
+  return `
+    <div class="modal-overlay" onclick="if(event.target===this) toggleBackup()">
+      <div class="modal-card">
+        <p class="modal-title display">Back up & restore</p>
+        <p class="modal-desc">Back up saves a file to your Downloads (or Files on iPhone/iPad). Restore loads it back in. Keep backups in iCloud Drive or Google Drive for safety.</p>
+        <button class="modal-btn" style="background:var(--sage);" onclick="backupAllData()">💾 Back up all data</button>
+        <button class="modal-btn" style="background:var(--slate);" onclick="triggerRestore()">📂 Restore from backup</button>
+        <button class="btn-cancel" style="width:100%;border-radius:10px;padding:11px;" onclick="toggleBackup()">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function toggleBackup() {
+  showBackup = !showBackup;
+  render();
+}
+
+function backupAllData() {
+  const payload = { app: "hrt-tracker", exportedAt: new Date().toISOString(), items, periods, history };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `hrt-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showBackup = false;
+  render();
+}
+
+function triggerRestore() {
+  document.getElementById("restore-input").click();
+}
+
+function handleRestoreFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (Array.isArray(data.items)) items = data.items;
+      if (Array.isArray(data.periods)) periods = data.periods;
+      if (Array.isArray(data.history)) history = data.history;
+      save();
+      savePeriods();
+      saveHistory();
+      showBackup = false;
+      render();
+    } catch (err) {
+      alert("That doesn't look like a valid backup file.");
+    }
+  };
+  reader.readAsText(file);
+  input.value = "";
+}
+
+function combinedRingHtml(now) {
+  const base = new Date();
+  base.setDate(1);
+  base.setMonth(base.getMonth() + calendarOffset);
+  const year = base.getFullYear();
+  const month = base.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthLabel = base.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const todayDate = calendarOffset === 0 ? new Date(now).getDate() : null;
+
+  const size = 260, center = size / 2, rOuter = 108, rInner = 76;
+  let outerNodes = "", innerNodes = "";
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const angle = ((day - 1) / daysInMonth) * 360 - 90;
+    const rad = (angle * Math.PI) / 180;
+    const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const hasPatch = history.some((h) => h.type === "patch" && h.date === key);
+    const hasPill = history.some((h) => h.type === "pill" && h.date === key);
+    const isToday = day === todayDate;
+
+    const xo = center + rOuter * Math.cos(rad), yo = center + rOuter * Math.sin(rad);
+    outerNodes += hasPatch
+      ? `<span class="ring2-dot" style="left:${xo}px;top:${yo}px;width:11px;height:11px;background:var(--rose);"></span>`
+      : `<span class="ring2-label" style="left:${xo}px;top:${yo}px;${isToday ? "font-weight:700;color:var(--ink);" : ""}">${day}</span>`;
+
+    if (hasPill) {
+      const xi = center + rInner * Math.cos(rad), yi = center + rInner * Math.sin(rad);
+      innerNodes += `<span class="ring2-dot" style="left:${xi}px;top:${yi}px;width:10px;height:10px;background:var(--slate);"></span>`;
+    }
+  }
+
+  return `
+    <div class="section">
+      <div class="cal-header">
+        <button class="cal-nav" onclick="changeMonth(-1)" aria-label="Previous month">‹</button>
+        <p class="section-title" style="margin:0;">${monthLabel}</p>
+        <button class="cal-nav" onclick="changeMonth(1)" aria-label="Next month">›</button>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;align-items:center;">
+        <div style="position:relative;width:${size}px;height:${size}px;margin:10px 0;">
+          ${outerNodes}
+          ${innerNodes}
+          <div class="ring2-center">
+            <p class="mono" style="font-size:10px;color:var(--muted);margin:0;text-transform:uppercase;letter-spacing:0.06em;">${calendarOffset === 0 ? "Today" : monthLabel.split(" ")[0]}</p>
+            <p class="display" style="font-size:26px;margin:3px 0 0;">${calendarOffset === 0 ? new Date(now).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : year}</p>
+          </div>
+        </div>
+        <div class="cal-legend">
+          <span><span class="cal-dot" style="background:var(--rose);"></span>Patch</span>
+          <span><span class="cal-dot" style="background:var(--slate);"></span>Pill</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function calendarHtml() {
+  const base = new Date();
+  base.setDate(1);
+  base.setMonth(base.getMonth() + calendarOffset);
+  const year = base.getFullYear();
+  const month = base.getMonth();
+  const startWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthLabel = base.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const todayKey = localDateKey(Date.now());
+
+  const dayMarks = {};
+  history.forEach((h) => {
+    if (h.date.slice(0, 4) == year && Number(h.date.slice(5, 7)) - 1 === month) {
+      dayMarks[h.date] = dayMarks[h.date] || {};
+      dayMarks[h.date][h.type] = true;
+    }
+  });
+  periods.forEach((p) => {
+    const key = localDateKey(new Date(p).getTime());
+    if (key.slice(0, 4) == year && Number(key.slice(5, 7)) - 1 === month) {
+      dayMarks[key] = dayMarks[key] || {};
+      dayMarks[key].period = true;
+    }
+  });
+
+  let cells = "";
+  for (let i = 0; i < startWeekday; i++) cells += `<div class="cal-cell empty-day"></div>`;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const marks = dayMarks[key] || {};
+    let dots = "";
+    if (marks.patch) dots += `<span class="cal-dot" style="background:var(--rose);"></span>`;
+    if (marks.pill) dots += `<span class="cal-dot" style="background:var(--slate);"></span>`;
+    if (marks.period) dots += `<span class="cal-dot" style="background:var(--sage);"></span>`;
+    cells += `<div class="cal-cell ${key === todayKey ? "today" : ""}"><span class="cal-day-num mono">${day}</span><div class="cal-dots">${dots}</div></div>`;
+  }
+
+  return `
+    <div class="section">
+      <div class="cal-header">
+        <button class="cal-nav" onclick="changeMonth(-1)" aria-label="Previous month">‹</button>
+        <p class="section-title" style="margin:0;">${monthLabel}</p>
+        <button class="cal-nav" onclick="changeMonth(1)" aria-label="Next month">›</button>
+      </div>
+      <div class="card">
+        <div class="cal-grid cal-weekdays">${WEEKDAY_LABELS.map((w) => `<div class="cal-wd">${w}</div>`).join("")}</div>
+        <div class="cal-grid">${cells}</div>
+        <div class="cal-legend">
+          <span><span class="cal-dot" style="background:var(--rose);"></span>Patch</span>
+          <span><span class="cal-dot" style="background:var(--slate);"></span>Pill</span>
+          <span><span class="cal-dot" style="background:var(--sage);"></span>Period</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function changeMonth(delta) {
+  calendarOffset += delta;
+  render();
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function render() {
+  const now = Date.now();
+  const withInfo = items.map((it) => ({ item: it, info: getInfo(it, now) }));
+  const sorted = [...withInfo].sort((a, b) => a.info.sortTs - b.info.sortTs);
+  const hero = sorted[0];
+  const patches = sorted.filter((x) => x.item.type === "patch");
+  const pills = sorted.filter((x) => x.item.type === "pill");
+
+  let html = `
+    <p class="eyebrow">On schedule</p>
+    <button onclick="openEditTitle()" style="background:none;border:none;padding:0;text-align:left;cursor:pointer;display:block;color:inherit;-webkit-appearance:none;appearance:none;" aria-label="Edit title">
+      <h1 class="display" style="text-decoration:underline;text-decoration-color:var(--line);text-decoration-thickness:1px;">${esc(appTitle)}</h1>
+    </button>
+    ${editingTitle ? `
+      <div style="margin-bottom:16px;">
+        <input type="text" id="edit-title-input" value="${esc(appTitle)}" class="full" style="margin-bottom:8px;" />
+        <div style="display:flex;gap:8px;">
+          <button class="btn-cancel" style="flex:1;border-radius:8px;padding:9px;" onclick="cancelEditTitle()">Cancel</button>
+          <button class="btn-submit" style="flex:1;border-radius:8px;padding:9px;" onclick="saveEditTitle()">Save title</button>
+        </div>
+      </div>
+    ` : ""}
+    <div class="tabs">
+      <button class="tab-btn ${activeTab === "tracker" ? "active" : ""}" onclick="setTab('tracker')">Tracker</button>
+      <button class="tab-btn ${activeTab === "period" ? "active" : ""}" onclick="setTab('period')">Period</button>
+    </div>
+  `;
+
+  if (activeTab === "period") {
+    html += periodTabHtml(now);
+  } else {
+    html += hero ? heroHtml(hero, now) : `
+      <div class="card empty" style="margin-bottom:32px;">
+        <p class="display">Nothing tracked yet</p>
+        <p>Add a patch or pill below to get started.</p>
+      </div>
+    `;
+
+    html += sectionHtml("Patches", "#59705B", patches, now, hero ? hero.item.id : null);
+    html += sectionHtml("Pills", "#9AAEA3", pills, now, hero ? hero.item.id : null);
+
+    html += `<div style="margin-top:24px;">`;
+    html += showAdd ? formHtml() : `<button class="add-toggle" onclick="toggleAdd()">+ Add medication</button>`;
+    html += `</div>`;
+  }
+
+  html += `<div style="text-align:center;margin-top:28px;"><button class="backup-link" onclick="toggleBackup()">Back up & restore</button></div>`;
+
+  if (showBackup) html += backupModalHtml();
+
+  document.getElementById("app").innerHTML = html;
+}
+
+function openEditTitle() {
+  editingTitle = true;
+  render();
+}
+
+function cancelEditTitle() {
+  editingTitle = false;
+  render();
+}
+
+function saveEditTitle() {
+  const input = document.getElementById("edit-title-input");
+  if (input && input.value.trim()) {
+    appTitle = input.value.trim();
+    storageSet("hrt-tracker-title", appTitle);
+  }
+  editingTitle = false;
+  render();
+}
+
+function setTab(t) {
+  activeTab = t;
+  render();
+}
+
+function dayChecklistHtml(item, now) {
+  if (item.scheduleType !== "cycle") return "";
+  const info = getInfo(item, now);
+  if (info.state !== "active") return "";
+
+  const start = startOfDay(item.cycleStart);
+  const daysSince = Math.floor((startOfDay(now) - start) / DAY);
+  const daysIntoCycle = ((daysSince % item.cycleLength) + item.cycleLength) % item.cycleLength;
+  const cycleAnchorTs = startOfDay(now) - daysIntoCycle * DAY;
+
+  const totalChips = info.extended ? Math.max(item.pillDuration, info.courseDay) : item.pillDuration;
+  let chips = "";
+  for (let d = 1; d <= totalChips; d++) {
+    const dayTs = cycleAnchorTs + (item.pillStartDay - 1 + (d - 1)) * DAY;
+    const key = localDateKey(dayTs);
+    const checked = history.some((h) => h.itemId === item.id && h.date === key);
+    const isFuture = dayTs > now;
+    const style = checked ? `background:var(--slate);color:#fff;border-color:var(--slate);` : (d > item.pillDuration ? `border-color:var(--terracotta);` : "");
+    chips += `<button class="day-chip" style="${style}" ${isFuture ? "disabled style=\"opacity:0.35;\"" : `onclick="toggleCycleDay('${item.id}', ${d})"`}>${d}</button>`;
+  }
+  return `<div class="day-chip-row">${chips}</div>`;
+}
+
+function toggleCycleDay(id, dayNum) {
+  const item = items.find((it) => it.id === id);
+  if (!item || item.scheduleType !== "cycle") return;
+  const now = Date.now();
+  const info = getInfo(item, now);
+  if (info.state !== "active") return;
+
+  const start = startOfDay(item.cycleStart);
+  const daysSince = Math.floor((startOfDay(now) - start) / DAY);
+  const daysIntoCycle = ((daysSince % item.cycleLength) + item.cycleLength) % item.cycleLength;
+  const cycleAnchorTs = startOfDay(now) - daysIntoCycle * DAY;
+  const dayTs = cycleAnchorTs + (item.pillStartDay - 1 + (dayNum - 1)) * DAY;
+  const key = localDateKey(dayTs);
+
+  const idx = history.findIndex((h) => h.itemId === id && h.date === key);
+  if (idx !== -1) {
+    history.splice(idx, 1);
+  } else {
+    history.push({ date: key, type: item.type, name: item.name, itemId: id });
+    if (!item.lastDone || dayTs > new Date(item.lastDone).getTime()) {
+      items = items.map((it) => it.id === id ? { ...it, lastDone: new Date(dayTs + 12 * 60 * 60 * 1000).toISOString() } : it);
+      save();
+    }
+  }
+  saveHistory();
+  render();
+}
+
+function computeWeekdayStreak(item, now) {
+  let streak = 0;
+  let cursor = startOfDay(now);
+  for (let i = 0; i < 120; i++) {
+    const wd = new Date(cursor).getDay();
+    const entry = item.weekdaySchedule.find((s) => s.day === wd);
+    if (entry) {
+      const [h, m] = entry.time.split(":").map(Number);
+      const ts = cursor + h * 60 * 60 * 1000 + m * 60 * 1000;
+      if (ts > now) { cursor -= DAY; continue; }
+      const done = history.some((hh) => hh.itemId === item.id && hh.date === localDateKey(ts));
+      if (done) { streak++; cursor -= DAY; continue; }
+      break;
+    }
+    cursor -= DAY;
+  }
+  return streak;
+}
+
+function getPatchCycleInfo(item, now, offset) {
+  const N = item.cyclePatchCount || 8;
+  const anchorDay = startOfDay(new Date(item.cycleAnchor).getTime());
+  const todayDay = startOfDay(now);
+
+  let countThroughToday = 0;
+  let cursor = anchorDay;
+  let guard = 0;
+  while (cursor <= todayDay && guard < 3650) {
+    const wd = new Date(cursor).getDay();
+    if (item.weekdaySchedule.some((s) => s.day === wd)) countThroughToday++;
+    cursor += DAY;
+    guard++;
+  }
+
+  const posOfMostRecent = countThroughToday === 0 ? 0 : ((countThroughToday - 1) % N) + 1;
+  let blockStartAbsIndex = countThroughToday === 0 ? 1 : countThroughToday - posOfMostRecent + 1;
+  blockStartAbsIndex += offset * N;
+  if (blockStartAbsIndex < 1) blockStartAbsIndex = 1;
+
+  const blockDates = [];
+  cursor = anchorDay;
+  let absIndex = 0;
+  guard = 0;
+  while (blockDates.length < N && guard < 3650) {
+    const wd = new Date(cursor).getDay();
+    if (item.weekdaySchedule.some((s) => s.day === wd)) {
+      absIndex++;
+      if (absIndex >= blockStartAbsIndex) blockDates.push(cursor);
+    }
+    cursor += DAY;
+    guard++;
+  }
+
+  return { N, blockDates, positionOfMostRecent: offset === 0 ? posOfMostRecent : null };
+}
+
+function changePatchCycle(delta) {
+  patchCycleOffset += delta;
+  render();
+}
+
+function openCycleSettings(id) {
+  editingCycleId = id;
+  render();
+}
+
+function cancelCycleSettings() {
+  editingCycleId = null;
+  render();
+}
+
+function saveCycleSettings(id) {
+  const dateInput = document.getElementById("cycle-anchor-" + id);
+  const countInput = document.getElementById("cycle-count-" + id);
+  if (!dateInput || !dateInput.value) { editingCycleId = null; render(); return; }
+  const count = countInput && Number(countInput.value) > 0 ? Number(countInput.value) : 8;
+  items = items.map((it) => it.id === id ? { ...it, cycleAnchor: new Date(dateInput.value).toISOString(), cyclePatchCount: count } : it);
+  save();
+  patchCycleOffset = 0;
+  editingCycleId = null;
+  render();
+}
+
+function clearCycleSettings(id) {
+  items = items.map((it) => it.id === id ? { ...it, cycleAnchor: undefined, cyclePatchCount: undefined } : it);
+  save();
+  editingCycleId = null;
+  render();
+}
+
+function patchRingHtml(item, now) {
+  if (item.scheduleType !== "weekdays") return "";
+  const size = 300, center = size / 2, R = 112, rPill = 138;
+  const streak = computeWeekdayStreak(item, now);
+  let nodes = "", headerHtml, centerLabel, centerDate, doneCount, totalCount;
+
+  if (item.cycleAnchor) {
+    const { N, blockDates, positionOfMostRecent } = getPatchCycleInfo(item, now, patchCycleOffset);
+    doneCount = blockDates.filter((ts) => history.some((h) => h.itemId === item.id && h.date === localDateKey(ts))).length;
+    totalCount = N;
+
+    blockDates.forEach((dayStart, i) => {
+      const angle = (i / N) * 360 - 90;
+      const rad = (angle * Math.PI) / 180;
+      const x = center + R * Math.cos(rad), y = center + R * Math.sin(rad);
+      const wd = new Date(dayStart).getDay();
+      const entry = item.weekdaySchedule.find((s) => s.day === wd);
+      const [h, m] = entry.time.split(":").map(Number);
+      const ts = dayStart + h * 60 * 60 * 1000 + m * 60 * 1000;
+      const key = localDateKey(ts);
+      const done = history.some((hh) => hh.itemId === item.id && hh.date === key);
+      const isFuture = ts > now;
+      let bg = "#fff", border = "var(--line)", color = "var(--muted)", content = i + 1;
+      if (done) { bg = "var(--rose)"; border = "var(--rose)"; color = "#fff"; content = "✓"; }
+      else if (!isFuture) { border = "var(--terracotta)"; color = "var(--terracotta)"; }
+      else { color = "var(--dim)"; }
+      nodes += `<button class="ring-day" style="left:${x}px;top:${y}px;background:${bg};border-color:${border};color:${color};" ${isFuture ? "disabled" : `onclick="toggleWeekdayOccurrence('${item.id}', ${ts})"`}>${content}</button>`;
+    });
+
+    const rangeStart = blockDates[0];
+    const rangeEnd = blockDates[blockDates.length - 1];
+    const totalDaysInRange = Math.round((rangeEnd - rangeStart) / DAY) + 1;
+    for (let dOffset = 0; dOffset < totalDaysInRange; dOffset++) {
+      const dayTs = rangeStart + dOffset * DAY;
+      const dayKey = localDateKey(dayTs);
+      if (history.some((hh) => hh.type === "pill" && hh.date === dayKey)) {
+        const pAngle = (dOffset / totalDaysInRange) * 360 - 90;
+        const pRad = (pAngle * Math.PI) / 180;
+        const xp = center + rPill * Math.cos(pRad), yp = center + rPill * Math.sin(pRad);
+        nodes += `<span class="ring2-dot" style="left:${xp}px;top:${yp}px;width:9px;height:9px;background:var(--slate);"></span>`;
+      }
+    }
+
+    const rangeLabel = `${formatDateShort(blockDates[0])} – ${formatDateShort(blockDates[blockDates.length - 1])}`;
+    headerHtml = `
+      <div class="cal-header" style="max-width:300px;margin:0 auto 4px;">
+        <button class="cal-nav" onclick="changePatchCycle(-1)" aria-label="Previous cycle">‹</button>
+        <p class="section-title" style="margin:0;">${rangeLabel}</p>
+        <button class="cal-nav" onclick="changePatchCycle(1)" aria-label="Next cycle">›</button>
+      </div>
+    `;
+    centerLabel = patchCycleOffset === 0 ? "Today" : "Cycle";
+    centerDate = patchCycleOffset === 0
+      ? new Date(now).toLocaleDateString(undefined, { day: "numeric", month: "short" })
+      : formatDateShort(blockDates[0]);
+  } else {
+    const base = new Date(now);
+    base.setDate(1);
+    base.setMonth(base.getMonth() + calendarOffset);
+    const year = base.getFullYear();
+    const month = base.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const todayDate = calendarOffset === 0 ? new Date(now).getDate() : null;
+    const monthLabel = base.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+    const scheduledTs = {};
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayStart = new Date(year, month, day).getTime();
+      const wd = new Date(dayStart).getDay();
+      const entry = item.weekdaySchedule.find((s) => s.day === wd);
+      if (entry) {
+        const [h, m] = entry.time.split(":").map(Number);
+        scheduledTs[day] = dayStart + h * 60 * 60 * 1000 + m * 60 * 1000;
+      }
+    }
+    const pastEntries = Object.values(scheduledTs).filter((ts) => ts <= now);
+    doneCount = pastEntries.filter((ts) => history.some((h) => h.itemId === item.id && h.date === localDateKey(ts))).length;
+    totalCount = pastEntries.length;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const angle = ((day - 1) / daysInMonth) * 360 - 90;
+      const rad = (angle * Math.PI) / 180;
+      const x = center + R * Math.cos(rad), y = center + R * Math.sin(rad);
+
+      if (scheduledTs[day] !== undefined) {
+        const ts = scheduledTs[day];
+        const key = localDateKey(ts);
+        const done = history.some((h) => h.itemId === item.id && h.date === key);
+        const isFuture = ts > now;
+        let bg = "#fff", border = "var(--line)", color = "var(--muted)", content = day;
+        if (done) { bg = "var(--rose)"; border = "var(--rose)"; color = "#fff"; content = "✓"; }
+        else if (!isFuture) { border = "var(--terracotta)"; color = "var(--terracotta)"; }
+        else { color = "var(--dim)"; }
+        nodes += `<button class="ring-day" style="left:${x}px;top:${y}px;background:${bg};border-color:${border};color:${color};" ${isFuture ? "disabled" : `onclick="toggleWeekdayOccurrence('${item.id}', ${ts})"`}>${content}</button>`;
+      } else {
+        const isToday = day === todayDate;
+        nodes += `<span class="ring-label" style="left:${x}px;top:${y}px;${isToday ? "font-weight:700;color:var(--ink);" : ""}">${day}</span>`;
+      }
+
+      const dayKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      if (history.some((h) => h.type === "pill" && h.date === dayKey)) {
+        const xp = center + rPill * Math.cos(rad), yp = center + rPill * Math.sin(rad);
+        nodes += `<span class="ring2-dot" style="left:${xp}px;top:${yp}px;width:9px;height:9px;background:var(--slate);"></span>`;
+      }
+    }
+
+    headerHtml = `
+      <div class="cal-header" style="max-width:300px;margin:0 auto 4px;">
+        <button class="cal-nav" onclick="changeMonth(-1)" aria-label="Previous month">‹</button>
+        <p class="section-title" style="margin:0;">${monthLabel}</p>
+        <button class="cal-nav" onclick="changeMonth(1)" aria-label="Next month">›</button>
+      </div>
+    `;
+    centerLabel = calendarOffset === 0 ? "Today" : monthLabel.split(" ")[0];
+    centerDate = calendarOffset === 0 ? new Date(now).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : year;
+  }
+
+  const settingsHtml = editingCycleId === item.id ? `
+    <div style="max-width:300px;margin:12px auto 0;text-align:left;">
+      <div class="field-row" style="margin-bottom:8px;">
+        <span class="field-label">First patch of cycle</span>
+        <input type="date" id="cycle-anchor-${item.id}" value="${item.cycleAnchor ? new Date(item.cycleAnchor).toISOString().slice(0, 10) : new Date(now).toISOString().slice(0, 10)}" />
+      </div>
+      <div class="field-row" style="margin-bottom:8px;">
+        <span class="field-label">Patches per cycle</span>
+        <input type="number" id="cycle-count-${item.id}" min="1" value="${item.cyclePatchCount || 8}" style="width:64px;" />
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-cancel" style="flex:1;border-radius:8px;padding:9px;font-size:13px;" onclick="cancelCycleSettings()">Cancel</button>
+        <button class="btn-submit" style="flex:1;border-radius:8px;padding:9px;font-size:13px;" onclick="saveCycleSettings('${item.id}')">Save</button>
+      </div>
+      ${item.cycleAnchor ? `<button class="backup-link" style="margin-top:8px;" onclick="clearCycleSettings('${item.id}')">Switch back to calendar month</button>` : ""}
+    </div>
+  ` : `<button class="backup-link" style="display:block;text-align:center;margin:12px auto 0;" onclick="openCycleSettings('${item.id}')">${item.cycleAnchor ? "Adjust cycle start" : "Track by cycle instead of month"}</button>`;
+
+  return `
+    <div class="ring-wrap">
+      ${headerHtml}
+      <div class="ring" style="width:${size}px;height:${size}px;">
+        ${nodes}
+        <div class="ring-center">
+          <p class="ring-center-label">${centerLabel}</p>
+          <p class="ring-center-date display">${centerDate}</p>
+          <p class="ring-center-sub">${streak > 0 ? streak + " in a row 🌱" : "Let's start a streak"}</p>
+        </div>
+      </div>
+      <div class="cal-legend" style="justify-content:center;">
+        <span><span class="cal-dot" style="background:var(--rose);"></span>Patch</span>
+        <span><span class="cal-dot" style="background:var(--slate);"></span>Pill</span>
+      </div>
+      <div class="ring-stats">
+        <div><p class="ring-stat-num mono">${doneCount}/${totalCount}</p><p class="ring-stat-label">${item.cycleAnchor ? "This cycle" : "This month"}</p></div>
+        <div><p class="ring-stat-num mono">${streak}</p><p class="ring-stat-label">Streak</p></div>
+      </div>
+      ${settingsHtml}
+    </div>
+  `;
+}
+
+function patchMonthChecklistHtml(item, now) {
+  if (item.scheduleType !== "weekdays") return "";
+  const d = new Date(now);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const occurrences = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dayStart = new Date(year, month, day).getTime();
+    const wd = new Date(dayStart).getDay();
+    const entry = item.weekdaySchedule.find((s) => s.day === wd);
+    if (entry) {
+      const [h, m] = entry.time.split(":").map(Number);
+      occurrences.push(dayStart + h * 60 * 60 * 1000 + m * 60 * 1000);
+    }
+  }
+  if (occurrences.length === 0) return "";
+
+  let chips = "";
+  occurrences.forEach((ts, i) => {
+    const key = localDateKey(ts);
+    const checked = history.some((h) => h.itemId === item.id && h.date === key);
+    const isFuture = ts > now;
+    const style = checked ? `background:var(--rose);color:#fff;border-color:var(--rose);` : "";
+    chips += `<button class="day-chip" style="${style}" ${isFuture ? "disabled style=\"opacity:0.35;\"" : `onclick="toggleWeekdayOccurrence('${item.id}', ${ts})"`}>${i + 1}</button>`;
+  });
+  return `<div class="day-chip-row">${chips}</div>`;
+}
+
+function toggleWeekdayOccurrence(id, ts) {
+  const item = items.find((it) => it.id === id);
+  if (!item || item.scheduleType !== "weekdays") return;
+  const key = localDateKey(ts);
+
+  const idx = history.findIndex((h) => h.itemId === id && h.date === key);
+  if (idx !== -1) {
+    history.splice(idx, 1);
+  } else {
+    history.push({ date: key, type: item.type, name: item.name, itemId: id });
+    if (!item.lastDone || ts > new Date(item.lastDone).getTime()) {
+      items = items.map((it) => it.id === id ? { ...it, lastDone: new Date(ts).toISOString() } : it);
+      save();
+    }
+  }
+  saveHistory();
+  render();
+}
+
+function heroHtml(entry, now) {
+  const { item, info } = entry;
+  const color = item.type === "patch" ? "#59705B" : "#9AAEA3";
+  const statusColor = info.state === "overdue" ? "var(--terracotta)" : (info.state === "today" || info.state === "active") ? "var(--rose)" : "var(--sage)";
+  let primary, secondary, buttonLabel = item.type === "patch" ? "Mark patch changed" : "Mark taken";
+
+  if (info.state === "unset") {
+    primary = "Not started"; secondary = "Log your first dose to start tracking";
+  } else if (info.state === "active") {
+    primary = `Day ${info.courseDay} of ${item.pillDuration}`;
+    secondary = info.extended
+      ? `Running a few days behind — ${Math.max(item.pillDuration - info.dosesSoFar, 0)} dose${item.pillDuration - info.dosesSoFar === 1 ? "" : "s"} still needed`
+      : `Course runs through ${formatDateShort(info.windowEndTs)}`;
+    buttonLabel = info.takenToday ? "Taken today ✓" : "Mark taken today";
+  } else if (info.state === "waiting") {
+    primary = formatCountdown(info.nextStartTs - now);
+    secondary = "Course starts " + formatWhen(info.nextStartTs);
+    buttonLabel = null;
+  } else {
+    primary = formatCountdown(info.dueTs - now);
+    secondary = (info.state === "overdue" ? "Was due " : "Due ") + formatWhen(info.dueTs);
+  }
+
+  return `
+    <div class="card hero">
+      <div class="hero-top">
+        <span class="badge mono" style="background:${color}1A;color:${color};">Next up · ${item.type}</span>
+        ${item.site && info.state !== "unset" ? `<button class="mono" style="font-size:12px;color:var(--muted);background:none;border:1px solid var(--line);border-radius:999px;padding:3px 10px;cursor:pointer;" onclick="swapSide('${item.id}')">Next: ${item.site} side ⇄</button>` : ""}
+      </div>
+      <p class="hero-name display">${esc(item.name)}</p>
+      <p class="hero-primary mono" style="color:${statusColor};">${primary}</p>
+      <p class="hero-secondary">${secondary}</p>
+      ${dayChecklistHtml(item, now)}
+      ${patchRingHtml(item, now)}
+      ${editingId === item.id ? `
+        <p class="hero-secondary" style="margin-top:14px;color:var(--sage);">↓ Editing the time for this below</p>
+      ` : `
+        ${buttonLabel ? `<button class="btn" style="background:${color};" onclick="markDone('${item.id}')">✓ ${buttonLabel}</button>` : ""}
+        ${wasMarkedToday(item) ? `<button class="backup-link" style="margin-top:8px;display:block;" onclick="undoToday('${item.id}')">↩ Undo today's mark</button>` : ""}
+        <button class="backup-link" style="margin:6px 0 0;display:block;" onclick="openEditTime('${item.id}')">Log for a different time</button>
+      `}
+    </div>`;
+}
+
+function sectionHtml(title, color, entries, now, heroId) {
+  if (entries.length === 0) return "";
+  let rows = entries.map(({ item, info }) => {
+    const statusColor = info.state === "overdue" ? "var(--terracotta)" : (info.state === "today" || info.state === "active") ? "var(--rose)" : info.state === "unset" ? "var(--dim)" : "var(--sage)";
+    let sub;
+    if (info.state === "unset") sub = "not started";
+    else if (info.state === "active") sub = `day ${info.courseDay} of ${item.pillDuration}`;
+    else if (info.state === "waiting") sub = "starts " + formatCountdown(info.nextStartTs - now);
+    else sub = formatCountdown(info.dueTs - now);
+
+    const isHero = item.id === heroId;
+
+    return `
+      <div class="row">
+        <div style="min-width:0;">
+          <button onclick="openEditName('${item.id}')" style="background:none;border:none;padding:0;text-align:left;cursor:pointer;color:inherit;-webkit-appearance:none;appearance:none;" aria-label="Edit name">
+            <p class="row-name" style="text-decoration:underline;text-decoration-color:var(--line);">${esc(item.name)}</p>
+          </button>
+          <p class="row-sub mono" style="color:${statusColor};">${sub}${isHero ? " · shown above" : ""}</p>
+        </div>
+        <div class="row-actions">
+          <button class="icon-btn" style="background:${color}1A;color:${color};" onclick="markDone('${item.id}')" aria-label="Mark done">✓</button>
+          ${wasMarkedToday(item) ? `<button class="icon-btn" style="color:var(--terracotta);" onclick="undoToday('${item.id}')" aria-label="Undo today">↩</button>` : ""}
+          <button class="icon-btn" style="color:var(--muted);" onclick="openEditTime('${item.id}')" aria-label="Edit time">🕐</button>
+          <button class="icon-btn" style="color:var(--dim);" onclick="removeItem('${item.id}')" aria-label="Remove">✕</button>
+        </div>
+      </div>
+      ${item.scheduleType === "cycle" && info.state === "active" && !isHero ? `<div class="row" style="border-top:none;padding-top:0;justify-content:center;">${dayChecklistHtml(item, now)}</div>` : ""}
+      ${item.scheduleType === "weekdays" && !isHero ? `<div class="row" style="border-top:none;padding-top:0;justify-content:center;">${patchRingHtml(item, now)}</div>` : ""}
+      ${editingNameId === item.id ? `
+        <div class="row" style="background:#E4E9E2;flex-direction:column;align-items:stretch;gap:8px;">
+          <input type="text" id="edit-name-${item.id}" value="${esc(item.name)}" class="full" />
+          <div style="display:flex;gap:8px;">
+            <button class="btn-cancel" style="flex:1;border-radius:8px;padding:8px;font-size:12px;" onclick="cancelEditName()">Cancel</button>
+            <button class="btn-submit" style="flex:1;border-radius:8px;padding:8px;font-size:12px;" onclick="saveEditName('${item.id}')">Save name</button>
+          </div>
+        </div>
+      ` : ""}
+      ${editingId === item.id ? `
+        <div class="row" style="background:#E4E9E2;flex-direction:column;align-items:stretch;gap:8px;">
+          <input type="datetime-local" id="edit-time-${item.id}" value="${toDatetimeInputValue(item.lastDone ? new Date(item.lastDone).getTime() : Date.now())}" />
+          <div style="display:flex;gap:8px;">
+            <button class="btn-cancel" style="flex:1;border-radius:8px;padding:8px;font-size:12px;" onclick="cancelEditTime()">Cancel</button>
+            <button class="btn-submit" style="flex:1;border-radius:8px;padding:8px;font-size:12px;" onclick="saveEditTime('${item.id}')">Update most recent</button>
+            <button class="btn-submit" style="flex:1;border-radius:8px;padding:8px;font-size:12px;background:var(--sage);" onclick="saveMissedDay('${item.id}')">Log missed day</button>
+          </div>
+        </div>
+      ` : ""}
+    `;
+  }).join("");
+
+  return `
+    <div class="section">
+      <p class="section-title" style="color:${color};">${title}</p>
+      ${rows}
+    </div>
+  `;
+}
+
+function formHtml() {
+  const isPatch = form.type === "patch";
+  let html = `<div class="card form-card">`;
+
+  html += `<div class="type-row">`;
+  ["patch", "pill"].forEach((t) => {
+    html += `<button class="toggle-btn ${form.type === t ? "active" : ""}" onclick="setType('${t}')">${t}</button>`;
+  });
+  html += `</div>`;
+
+  html += `<input class="full" type="text" placeholder="${isPatch ? "e.g. Estradiol 100mcg patch" : "e.g. Progesterone 100mg"}" value="${esc(form.name)}" oninput="setField('name', this.value)" />`;
+
+  html += `<div class="mode-row">`;
+  const modes = isPatch ? [["weekdays", "Fixed days"], ["interval", "Every N days"]] : [["cycle", "Cyclic course"], ["interval", "Every N days"]];
+  modes.forEach(([mode, label]) => {
+    html += `<button class="toggle-btn ${form.mode === mode ? "active" : ""}" onclick="setMode('${mode}')">${label}</button>`;
+  });
+  html += `</div>`;
+
+  if (isPatch && form.mode === "weekdays") {
+    html += `<div>
+      <p class="field-label" style="margin-bottom:6px;">Which days do you change it?</p>
+      <div class="weekday-grid">`;
+    WEEKDAY_LABELS.forEach((label, idx) => {
+      const active = form.weekdays.includes(idx);
+      html += `<button class="toggle-btn ${active ? "active" : ""}" onclick="toggleWeekday(${idx})">${label}</button>`;
+    });
+    html += `</div>`;
+    if (form.weekdays.length > 0) {
+      html += `<div class="day-time-list">`;
+      form.weekdays.forEach((d) => {
+        const t = form.weekdayTimeMap[d] || "09:00";
+        html += `<div class="field-row"><span class="field-label">Time on ${WEEKDAY_LABELS[d]}</span><input type="time" value="${t}" oninput="setWeekdayTime(${d}, this.value)" /></div>`;
+      });
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+
+  if (form.mode === "interval") {
+    html += `<div class="interval-row">Every <input type="number" min="0.5" step="0.5" value="${form.frequencyDays}" oninput="setField('frequencyDays', this.value)" /> days</div>`;
+  }
+
+  if (!isPatch && form.mode === "cycle") {
+    html += `
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="field-row"><span class="field-label">Cycle length (days)</span><input type="number" min="1" value="${form.cycleLength}" oninput="setField('cycleLength', this.value)" style="width:64px;" /></div>
+        <div class="field-row"><span class="field-label">Day 1 of current cycle</span><input type="date" value="${form.cycleStart}" oninput="setField('cycleStart', this.value)" /></div>
+        <div class="field-row"><span class="field-label">Start pills on day</span><input type="number" min="1" value="${form.pillStartDay}" oninput="setField('pillStartDay', this.value)" style="width:64px;" /></div>
+        <div class="field-row"><span class="field-label">Take for how many days</span><input type="number" min="1" value="${form.pillDuration}" oninput="setField('pillDuration', this.value)" style="width:64px;" /></div>
+        <div class="field-row"><span class="field-label">Usual time</span><input type="time" value="${form.pillTime}" oninput="setField('pillTime', this.value)" /></div>
+      </div>
+    `;
+  }
+
+  html += `<div class="form-actions">
+      <button class="btn-cancel" onclick="cancelAdd()">Cancel</button>
+      <button class="btn-submit" onclick="handleAdd()">Add</button>
+    </div>`;
+  if (formError) html += `<p class="error-text">${esc(formError)}</p>`;
+  html += `</div>`;
+  return html;
+}
+
+// ---- event handlers (global so inline onclick/oninput can reach them) ----
+function toggleAdd() { showAdd = true; formError = ""; render(); }
+function cancelAdd() { showAdd = false; form = defaultForm("patch"); formError = ""; render(); }
+function setType(type) { form = defaultForm(type); render(); }
+function setMode(mode) { form.mode = mode; render(); }
+function toggleWeekday(d) {
+  form.weekdays = form.weekdays.includes(d) ? form.weekdays.filter((x) => x !== d) : [...form.weekdays, d].sort();
+  render();
+}
+function setWeekdayTime(d, val) { form.weekdayTimeMap[d] = val; }
+function setField(key, val) { form[key] = val; }
+
+function handleAdd() {
+  if (!form.name.trim()) { formError = "Give it a name first."; render(); return; }
+  if (form.type === "patch" && form.mode === "weekdays" && form.weekdays.length === 0) {
+    formError = "Pick at least one day."; render(); return;
+  }
+  const base = { id: uid(), type: form.type, name: form.name.trim(), lastDone: null };
+  let item;
+  if (form.type === "patch") {
+    if (form.mode === "weekdays") {
+      const weekdaySchedule = form.weekdays.map((d) => ({ day: d, time: form.weekdayTimeMap[d] || "09:00" }));
+      item = { ...base, scheduleType: "weekdays", weekdaySchedule, site: "left" };
+    } else {
+      item = { ...base, scheduleType: "interval", frequencyDays: Number(form.frequencyDays), site: "left" };
+    }
+  } else {
+    if (form.mode === "cycle") {
+      item = {
+        ...base, scheduleType: "cycle",
+        cycleLength: Number(form.cycleLength),
+        cycleStart: new Date(form.cycleStart).getTime(),
+        pillStartDay: Number(form.pillStartDay),
+        pillDuration: Number(form.pillDuration),
+        pillTime: form.pillTime,
+      };
+    } else {
+      item = { ...base, scheduleType: "interval", frequencyDays: Number(form.frequencyDays) };
+    }
+  }
+  items.push(item);
+  save();
+  showAdd = false;
+  form = defaultForm("patch");
+  formError = "";
+  render();
+}
+
+function swapSide(id) {
+  items = items.map((it) =>
+    it.id === id && it.site ? { ...it, site: it.site === "left" ? "right" : "left" } : it
+  );
+  save();
+  render();
+}
+
+function wasMarkedToday(item) {
+  return item._actionAt !== undefined && (Date.now() - item._actionAt) < DAY;
+}
+
+function markDone(id) {
+  const target = items.find((it) => it.id === id);
+  if (!target) return;
+  const now = Date.now();
+  const info = getInfo(target, now);
+  const effectiveTs = (info.state === "overdue" && info.dueTs) ? info.dueTs : now;
+
+  items = items.map((it) => it.id === id
+    ? { ...it, lastDone: new Date(effectiveTs).toISOString(), site: it.site ? (it.site === "left" ? "right" : "left") : null, _prevLastDone: it.lastDone || null, _prevSite: it.site || null, _actionAt: now }
+    : it
+  );
+  history.push({ date: localDateKey(effectiveTs), type: target.type, name: target.name, itemId: id });
+  saveHistory();
+  save();
+  render();
+}
+
+function undoToday(id) {
+  const item = items.find((it) => it.id === id);
+  if (!item || !wasMarkedToday(item)) return;
+  const entryKey = item.lastDone ? localDateKey(new Date(item.lastDone).getTime()) : null;
+
+  if (entryKey) {
+    const idx = history.findIndex((h) => h.itemId === id && h.date === entryKey);
+    if (idx !== -1) {
+      history.splice(idx, 1);
+      saveHistory();
+    }
+  }
+
+  items = items.map((it) => it.id === id
+    ? { ...it, lastDone: it._prevLastDone !== undefined ? it._prevLastDone : null, site: it._prevSite !== undefined ? it._prevSite : it.site, _prevLastDone: undefined, _prevSite: undefined, _actionAt: undefined }
+    : it
+  );
+  save();
+  render();
+}
+
+function openEditName(id) {
+  editingNameId = id;
+  render();
+}
+
+function cancelEditName() {
+  editingNameId = null;
+  render();
+}
+
+function saveEditName(id) {
+  const input = document.getElementById("edit-name-" + id);
+  if (!input) { editingNameId = null; render(); return; }
+  const newName = input.value.trim();
+  if (!newName) { editingNameId = null; render(); return; }
+
+  items = items.map((it) => it.id === id ? { ...it, name: newName } : it);
+  history = history.map((h) => h.itemId === id ? { ...h, name: newName } : h);
+  save();
+  saveHistory();
+  editingNameId = null;
+  render();
+}
+
+function openEditTime(id) {
+  editingId = id;
+  render();
+}
+
+function cancelEditTime() {
+  editingId = null;
+  render();
+}
+
+function saveEditTime(id) {
+  const input = document.getElementById("edit-time-" + id);
+  if (!input || !input.value) { editingId = null; render(); return; }
+  const newTs = new Date(input.value).getTime();
+  if (isNaN(newTs)) { editingId = null; render(); return; }
+
+  const item = items.find((it) => it.id === id);
+  if (item) {
+    const oldKey = item.lastDone ? localDateKey(new Date(item.lastDone).getTime()) : null;
+    if (oldKey) {
+      const idx = history.findIndex((h) => h.itemId === id && h.date === oldKey);
+      if (idx !== -1) history.splice(idx, 1);
+    }
+    history.push({ date: localDateKey(newTs), type: item.type, name: item.name, itemId: id });
+    saveHistory();
+  }
+
+  items = items.map((it) => it.id === id ? { ...it, lastDone: new Date(newTs).toISOString() } : it);
+  save();
+  editingId = null;
+  render();
+}
+
+function saveMissedDay(id) {
+  const input = document.getElementById("edit-time-" + id);
+  if (!input || !input.value) { editingId = null; render(); return; }
+  const ts = new Date(input.value).getTime();
+  if (isNaN(ts)) { editingId = null; render(); return; }
+
+  const item = items.find((it) => it.id === id);
+  if (!item) { editingId = null; render(); return; }
+
+  const key = localDateKey(ts);
+  if (!history.some((h) => h.itemId === id && h.date === key)) {
+    history.push({ date: key, type: item.type, name: item.name, itemId: id });
+    saveHistory();
+  }
+
+  if (!item.lastDone || ts > new Date(item.lastDone).getTime()) {
+    items = items.map((it) => it.id === id ? { ...it, lastDone: new Date(ts).toISOString() } : it);
+    save();
+  }
+
+  editingId = null;
+  render();
+}
+
+function removeItem(id) {
+  items = items.filter((it) => it.id !== id);
+  save();
+  render();
+}
+
+render();
+setInterval(() => {
+  if (editingId === null && !showAdd) render();
+}, 30000);
+</script>
+</body>
+</html>
