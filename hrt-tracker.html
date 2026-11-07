@@ -210,6 +210,8 @@ let calendarOffset = 0;
 let patchCycleOffset = 0;
 let editingCycleId = null;
 let editingDurationFor = null;
+let editingPillSettingsId = null;
+let viewHistoryId = null;
 let periodRingOffset = 0;
 let activeTab = "tracker";
 let appTitle = storageGet("hrt-tracker-title") || "Keeping You Level";
@@ -338,6 +340,14 @@ function getInfo(item, now) {
     const dosesSoFar = history.filter((h) => h.itemId === item.id && h.date >= windowStartKey && h.date <= todayKey).length;
     const runningBehind = !nominalInWindow && cycleDay > windowEnd && cycleDay < windowEnd + 14 && dosesSoFar < item.pillDuration;
     const inWindow = nominalInWindow || runningBehind;
+
+    // Course just finished (either right on schedule, or today if it was caught up after running behind) —
+    // give a brief "complete" acknowledgement before switching to the countdown for the next cycle.
+    const finishedToday = item.lastDone && dateOnlyStr(item.lastDone) === dateOnlyStr(now) && dosesSoFar >= item.pillDuration;
+    const justFinished = !inWindow && dosesSoFar >= item.pillDuration && (cycleDay === windowEnd + 1 || finishedToday);
+    if (justFinished) {
+      return { state: "complete", windowEndTs, dosesSoFar, sortTs: -1 };
+    }
 
     if (inWindow) {
       const takenToday = item.lastDone && dateOnlyStr(item.lastDone) === dateOnlyStr(now);
@@ -980,6 +990,118 @@ function clearCycleSettings(id) {
   render();
 }
 
+function openPillSettings(id) {
+  editingPillSettingsId = id;
+  render();
+}
+
+function cancelPillSettings() {
+  editingPillSettingsId = null;
+  render();
+}
+
+function savePillSettings(id) {
+  const cycleLenInput = document.getElementById("pill-cyclelen-" + id);
+  const cycleStartInput = document.getElementById("pill-cyclestart-" + id);
+  const startDayInput = document.getElementById("pill-startday-" + id);
+  const durationInput = document.getElementById("pill-duration-" + id);
+  const timeInput = document.getElementById("pill-time-" + id);
+  if (!cycleStartInput || !cycleStartInput.value) { editingPillSettingsId = null; render(); return; }
+
+  const cycleLength = cycleLenInput && Number(cycleLenInput.value) > 0 ? Number(cycleLenInput.value) : 28;
+  const pillStartDay = startDayInput && Number(startDayInput.value) > 0 ? Number(startDayInput.value) : 15;
+  const pillDuration = durationInput && Number(durationInput.value) > 0 ? Number(durationInput.value) : 12;
+  const pillTime = timeInput && timeInput.value ? timeInput.value : "20:00";
+
+  items = items.map((it) => it.id === id ? {
+    ...it,
+    cycleLength,
+    cycleStart: new Date(cycleStartInput.value).getTime(),
+    pillStartDay,
+    pillDuration,
+    pillTime,
+  } : it);
+  save();
+  editingPillSettingsId = null;
+  render();
+}
+
+function pillSettingsHtml(item) {
+  if (item.scheduleType !== "cycle") return "";
+  if (editingPillSettingsId !== item.id) {
+    return `<button class="backup-link" style="display:block;text-align:center;margin:12px auto 0;" onclick="openPillSettings('${item.id}')">Adjust course settings</button>`;
+  }
+  return `
+    <div style="max-width:300px;margin:12px auto 0;text-align:left;">
+      <div class="field-row" style="margin-bottom:8px;">
+        <span class="field-label">Cycle length (days)</span>
+        <input type="number" min="1" id="pill-cyclelen-${item.id}" value="${item.cycleLength}" style="width:64px;" />
+      </div>
+      <div class="field-row" style="margin-bottom:8px;">
+        <span class="field-label">Day 1 of current cycle</span>
+        <input type="date" id="pill-cyclestart-${item.id}" value="${new Date(item.cycleStart).toISOString().slice(0, 10)}" />
+      </div>
+      <div class="field-row" style="margin-bottom:8px;">
+        <span class="field-label">Start pills on day</span>
+        <input type="number" min="1" id="pill-startday-${item.id}" value="${item.pillStartDay}" style="width:64px;" />
+      </div>
+      <div class="field-row" style="margin-bottom:8px;">
+        <span class="field-label">Take for how many days</span>
+        <input type="number" min="1" id="pill-duration-${item.id}" value="${item.pillDuration}" style="width:64px;" />
+      </div>
+      <div class="field-row" style="margin-bottom:8px;">
+        <span class="field-label">Usual time</span>
+        <input type="time" id="pill-time-${item.id}" value="${item.pillTime}" />
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-cancel" style="flex:1;border-radius:8px;padding:9px;font-size:13px;" onclick="cancelPillSettings()">Cancel</button>
+        <button class="btn-submit" style="flex:1;border-radius:8px;padding:9px;font-size:13px;" onclick="savePillSettings('${item.id}')">Save</button>
+      </div>
+    </div>
+  `;
+}
+
+function toggleViewHistory(id) {
+  viewHistoryId = viewHistoryId === id ? null : id;
+  render();
+}
+
+function deleteHistoryEntry(id, date) {
+  history = history.filter((h) => !(h.itemId === id && h.date === date));
+  saveHistory();
+
+  const remaining = history.filter((h) => h.itemId === id).map((h) => h.date).sort();
+  const newLastDoneKey = remaining.length ? remaining[remaining.length - 1] : null;
+  items = items.map((it) => it.id === id
+    ? { ...it, lastDone: newLastDoneKey ? new Date(newLastDoneKey + "T12:00:00").toISOString() : null }
+    : it
+  );
+  save();
+  render();
+}
+
+function historyListHtml(item) {
+  const entries = history.filter((h) => h.itemId === item.id).sort((a, b) => b.date.localeCompare(a.date));
+
+  if (viewHistoryId !== item.id) {
+    return `<button class="backup-link" style="display:block;text-align:center;margin:10px auto 0;" onclick="toggleViewHistory('${item.id}')">View history (${entries.length})</button>`;
+  }
+
+  const rows = entries.length ? entries.map((h) => `
+    <div class="row" style="padding:8px 12px;margin-bottom:6px;">
+      <p class="row-name mono" style="font-size:13px;">${formatDateShort(new Date(h.date + "T12:00:00").getTime())}</p>
+      <button class="icon-btn" style="color:var(--dim);" onclick="deleteHistoryEntry('${item.id}', '${h.date}')" aria-label="Delete entry">✕</button>
+    </div>
+  `).join("") : `<p style="font-size:12px;color:var(--muted);text-align:center;padding:8px 0;">Nothing logged yet.</p>`;
+
+  return `
+    <div style="max-width:300px;margin:10px auto 0;">
+      ${rows}
+      <button class="backup-link" style="display:block;text-align:center;margin:4px auto 0;" onclick="toggleViewHistory('${item.id}')">Hide history</button>
+    </div>
+  `;
+}
+
 function patchRingHtml(item, now) {
   if (item.scheduleType !== "weekdays") return "";
   const size = 300, center = size / 2, R = 112, rPill = 138;
@@ -1196,6 +1318,10 @@ function heroHtml(entry, now) {
 
   if (info.state === "unset") {
     primary = "Not started"; secondary = "Log your first dose to start tracking";
+  } else if (info.state === "complete") {
+    primary = "Course complete";
+    secondary = `All ${item.pillDuration} doses logged`;
+    buttonLabel = null;
   } else if (info.state === "active") {
     primary = `Day ${info.courseDay} of ${item.pillDuration}`;
     secondary = info.extended
@@ -1222,6 +1348,8 @@ function heroHtml(entry, now) {
       <p class="hero-secondary">${secondary}</p>
       ${dayChecklistHtml(item, now)}
       ${patchRingHtml(item, now)}
+      ${pillSettingsHtml(item)}
+      ${historyListHtml(item)}
       ${editingId === item.id ? `
         <p class="hero-secondary" style="margin-top:14px;color:var(--sage);">↓ Editing the time for this below</p>
       ` : `
@@ -1238,6 +1366,7 @@ function sectionHtml(title, color, entries, now, heroId) {
     const statusColor = info.state === "overdue" ? "var(--terracotta)" : (info.state === "today" || info.state === "active") ? "var(--rose)" : info.state === "unset" ? "var(--dim)" : "var(--sage)";
     let sub;
     if (info.state === "unset") sub = "not started";
+    else if (info.state === "complete") sub = "course complete";
     else if (info.state === "active") sub = `day ${info.courseDay} of ${item.pillDuration}`;
     else if (info.state === "waiting") sub = "starts " + formatCountdown(info.nextStartTs - now);
     else sub = formatCountdown(info.dueTs - now);
@@ -1261,6 +1390,7 @@ function sectionHtml(title, color, entries, now, heroId) {
       </div>
       ${item.scheduleType === "cycle" && info.state === "active" && !isHero ? `<div class="row" style="border-top:none;padding-top:0;justify-content:center;">${dayChecklistHtml(item, now)}</div>` : ""}
       ${item.scheduleType === "weekdays" && !isHero ? `<div class="row" style="border-top:none;padding-top:0;justify-content:center;">${patchRingHtml(item, now)}</div>` : ""}
+      ${item.scheduleType === "cycle" && !isHero ? `<div class="row" style="border-top:none;padding-top:0;flex-direction:column;align-items:stretch;">${pillSettingsHtml(item)}${historyListHtml(item)}</div>` : ""}
       ${editingNameId === item.id ? `
         <div class="row" style="background:#E4E9E2;flex-direction:column;align-items:stretch;gap:8px;">
           <input type="text" id="edit-name-${item.id}" value="${esc(item.name)}" class="full" />
@@ -1421,12 +1551,19 @@ function markDone(id) {
   const now = Date.now();
   const info = getInfo(target, now);
   const effectiveTs = (info.state === "overdue" && info.dueTs) ? info.dueTs : now;
+  const key = localDateKey(effectiveTs);
+
+  // Already logged for this date — don't create a second record for an accidental double-tap.
+  if (history.some((h) => h.itemId === id && h.date === key)) {
+    render();
+    return;
+  }
 
   items = items.map((it) => it.id === id
     ? { ...it, lastDone: new Date(effectiveTs).toISOString(), site: it.site ? (it.site === "left" ? "right" : "left") : null, _prevLastDone: it.lastDone || null, _prevSite: it.site || null, _actionAt: now }
     : it
   );
-  history.push({ date: localDateKey(effectiveTs), type: target.type, name: target.name, itemId: id });
+  history.push({ date: key, type: target.type, name: target.name, itemId: id });
   saveHistory();
   save();
   render();
