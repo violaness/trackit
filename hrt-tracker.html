@@ -130,7 +130,7 @@
   .ring-center-sub { font-size: 12px; color: var(--sage); margin: 0; }
   .ring-stats { display: flex; border: 1px solid var(--line); border-radius: 12px; margin-top: 16px; overflow: hidden; }
   .ring-stats > div { flex: 1; text-align: center; padding: 10px; }
-  .ring-stats > div:first-child { border-right: 1px solid var(--line); }
+  .ring-stats > div:not(:last-child) { border-right: 1px solid var(--line); }
   .ring-stat-num { font-size: 18px; font-weight: 600; margin: 0; }
   .ring-stat-label { font-size: 10px; color: var(--muted); margin: 2px 0 0; text-transform: uppercase; letter-spacing: 0.04em; }
   .ring2-dot { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); }
@@ -433,6 +433,11 @@ function periodRingHtml(now) {
   const lastStart = sortedDesc[0] ? new Date(periodStart(sortedDesc[0])).getTime() : null;
   const lengths = cycleLengthsChrono();
   const avgLength = lengths.length > 0 ? Math.round(lengths.reduce((a, b) => a + b, 0) / lengths.length) : null;
+  // Only predict once a few cycles have actually been logged (3+ periods) — a prediction off one cycle is just noise.
+  const predictedNextTs = (lastStart && avgLength && lengths.length >= 2)
+    ? startOfDay(lastStart) + avgLength * DAY
+    : null;
+  const predictedKey = predictedNextTs ? localDateKey(predictedNextTs) : null;
   const loggedThisMonth = periods.filter((p) => {
     const d2 = new Date(periodStart(p));
     return d2.getFullYear() === year && d2.getMonth() === month;
@@ -462,7 +467,11 @@ function periodRingHtml(now) {
     } else if (inSpan) {
       nodes += `<span class="ring-day" style="left:${x}px;top:${y}px;background:#BBBB9A80;border-color:transparent;color:#fff;display:flex;align-items:center;justify-content:center;position:absolute;width:28px;height:28px;border-radius:50%;transform:translate(-50%,-50%);font-size:11px;">${day}</span>`;
     } else if (isFuture) {
-      nodes += `<span class="ring-label" style="left:${x}px;top:${y}px;">${day}</span>`;
+      if (key === predictedKey) {
+        nodes += `<span class="ring-label" style="left:${x}px;top:${y}px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--sage);border-radius:50%;color:var(--sage);font-weight:600;" title="Predicted next period">${day}</span>`;
+      } else {
+        nodes += `<span class="ring-label" style="left:${x}px;top:${y}px;">${day}</span>`;
+      }
     } else {
       nodes += `<button class="ring-day" style="left:${x}px;top:${y}px;background:#fff;border-color:var(--line);color:var(--muted);${isToday ? "font-weight:700;" : ""}" onclick="togglePeriodDay(${dayStart})">${day}</button>`;
     }
@@ -497,7 +506,9 @@ function periodRingHtml(now) {
       <div class="ring-stats">
         <div><p class="ring-stat-num mono">${loggedThisMonth}</p><p class="ring-stat-label">This month</p></div>
         <div><p class="ring-stat-num mono">${avgLength || "–"}</p><p class="ring-stat-label">Avg cycle</p></div>
+        ${predictedNextTs ? `<div><p class="ring-stat-num mono" style="font-size:15px;">${formatDateShort(predictedNextTs)}</p><p class="ring-stat-label">Next predicted</p></div>` : ""}
       </div>
+      ${!predictedNextTs ? `<p style="font-size:11px;color:var(--muted);text-align:center;margin:8px 2px 0;">Log a few more periods to see a predicted next date.</p>` : ""}
     </div>
   `;
 }
