@@ -902,7 +902,7 @@ function dayChecklistHtml(item, now) {
     const isFuture = dayTs > now;
     const style = checked ? `background:var(--slate);color:#fff;border-color:var(--slate);` : (d > item.pillDuration ? `border-color:var(--terracotta);` : "");
     const dateLabel = new Date(dayTs).getDate();
-    chips += `<button class="day-chip" style="${style}" title="${formatDateShort(dayTs)}" ${isFuture ? "disabled style=\"opacity:0.35;\"" : `onclick="toggleCycleDay('${item.id}', ${d})"`}>${checked ? "✓" : dateLabel}</button>`;
+    chips += `<button class="day-chip" style="${style}" title="${formatDateShort(dayTs)}" ${isFuture ? "disabled style=\"opacity:0.35;\"" : `onclick="toggleCycleDay('${item.id}', ${d})"`}>${dateLabel}</button>`;
   }
   return `<div class="day-chip-row">${chips}</div>`;
 }
@@ -1159,8 +1159,9 @@ function patchRingHtml(item, now) {
       const key = localDateKey(ts);
       const done = history.some((hh) => hh.itemId === item.id && hh.date === key);
       const isFuture = ts > now;
+      // Keep the actual date visible on every chip — colour alone shows done/overdue/upcoming.
       let bg = "#fff", border = "var(--line)", color = "var(--muted)", content = new Date(dayStart).getDate();
-      if (done) { bg = "var(--rose)"; border = "var(--rose)"; color = "#fff"; content = "✓"; }
+      if (done) { bg = "var(--rose)"; border = "var(--rose)"; color = "#fff"; }
       else if (!isFuture) { border = "var(--terracotta)"; color = "var(--terracotta)"; }
       else { color = "var(--dim)"; }
       nodes += `<button class="ring-day" style="left:${x}px;top:${y}px;background:${bg};border-color:${border};color:${color};" title="${formatDateShort(ts)}" ${isFuture ? "disabled" : `onclick="toggleWeekdayOccurrence('${item.id}', ${ts})"`}>${content}</button>`;
@@ -1227,7 +1228,7 @@ function patchRingHtml(item, now) {
         const done = history.some((h) => h.itemId === item.id && h.date === key);
         const isFuture = ts > now;
         let bg = "#fff", border = "var(--line)", color = "var(--muted)", content = day;
-        if (done) { bg = "var(--rose)"; border = "var(--rose)"; color = "#fff"; content = "✓"; }
+        if (done) { bg = "var(--rose)"; border = "var(--rose)"; color = "#fff"; }
         else if (!isFuture) { border = "var(--terracotta)"; color = "var(--terracotta)"; }
         else { color = "var(--dim)"; }
         nodes += `<button class="ring-day" style="left:${x}px;top:${y}px;background:${bg};border-color:${border};color:${color};" ${isFuture ? "disabled" : `onclick="toggleWeekdayOccurrence('${item.id}', ${ts})"`}>${content}</button>`;
