@@ -213,6 +213,7 @@ let editingDurationFor = null;
 let editingPillSettingsId = null;
 let viewHistoryId = null;
 let periodRingOffset = 0;
+let showLogPeriodDate = false;
 let activeTab = "tracker";
 let appTitle = storageGet("hrt-tracker-title") || "Keeping You Level";
 let editingTitle = false;
@@ -418,97 +419,100 @@ function togglePeriodDay(ts) {
   render();
 }
 
-function periodRingHtml(now) {
-  const base = new Date(now);
-  base.setDate(1);
-  base.setMonth(base.getMonth() + periodRingOffset);
-  const year = base.getFullYear();
-  const month = base.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const todayDate = periodRingOffset === 0 ? new Date(now).getDate() : null;
-  const monthLabel = base.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-  const size = 300, center = size / 2, R = 112;
-
+function periodPhaseInfo(now) {
   const sortedDesc = [...periods].sort((a, b) => new Date(periodStart(b)) - new Date(periodStart(a)));
-  const lastStart = sortedDesc[0] ? new Date(periodStart(sortedDesc[0])).getTime() : null;
+  const lastStart = sortedDesc[0] ? startOfDay(new Date(periodStart(sortedDesc[0])).getTime()) : null;
   const lengths = cycleLengthsChrono();
-  const avgLength = lengths.length > 0 ? Math.round(lengths.reduce((a, b) => a + b, 0) / lengths.length) : null;
-  // Only predict once a few cycles have actually been logged (3+ periods) — a prediction off one cycle is just noise.
-  const predictedNextTs = (lastStart && avgLength && lengths.length >= 2)
-    ? startOfDay(lastStart) + avgLength * DAY
-    : null;
-  const predictedKey = predictedNextTs ? localDateKey(predictedNextTs) : null;
-  const loggedThisMonth = periods.filter((p) => {
-    const d2 = new Date(periodStart(p));
-    return d2.getFullYear() === year && d2.getMonth() === month;
-  }).length;
-
-  let nodes = "";
-  for (let day = 1; day <= daysInMonth; day++) {
-    const angle = ((day - 1) / daysInMonth) * 360 - 90;
-    const rad = (angle * Math.PI) / 180;
-    const x = center + R * Math.cos(rad);
-    const y = center + R * Math.sin(rad);
-    const dayStart = new Date(year, month, day).getTime();
-    const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const isStart = periods.some((p) => localDateKey(new Date(periodStart(p)).getTime()) === key);
-    const inSpan = !isStart && periods.some((p) => {
-      const dur = periodDuration(p);
-      if (!dur) return false;
-      const pStart = startOfDay(new Date(periodStart(p)).getTime());
-      const pEnd = pStart + (dur - 1) * DAY;
-      return dayStart >= pStart && dayStart <= pEnd;
-    });
-    const isFuture = dayStart > now;
-    const isToday = day === todayDate;
-
-    if (isStart) {
-      nodes += `<button class="ring-day" style="left:${x}px;top:${y}px;background:var(--sage);border-color:var(--sage);color:#fff;" onclick="togglePeriodDay(${dayStart})">✓</button>`;
-    } else if (inSpan) {
-      nodes += `<span class="ring-day" style="left:${x}px;top:${y}px;background:#BBBB9A80;border-color:transparent;color:#fff;display:flex;align-items:center;justify-content:center;position:absolute;width:28px;height:28px;border-radius:50%;transform:translate(-50%,-50%);font-size:11px;">${day}</span>`;
-    } else if (isFuture) {
-      if (key === predictedKey) {
-        nodes += `<span class="ring-label" style="left:${x}px;top:${y}px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--sage);border-radius:50%;color:var(--sage);font-weight:600;" title="Predicted next period">${day}</span>`;
-      } else {
-        nodes += `<span class="ring-label" style="left:${x}px;top:${y}px;">${day}</span>`;
-      }
-    } else {
-      nodes += `<button class="ring-day" style="left:${x}px;top:${y}px;background:#fff;border-color:var(--line);color:var(--muted);${isToday ? "font-weight:700;" : ""}" onclick="togglePeriodDay(${dayStart})">${day}</button>`;
-    }
+  const avgLength = lengths.length > 0 ? Math.round(lengths.reduce((a, b) => a + b, 0) / lengths.length) : 28;
+  const durations = periods.map((p) => periodDuration(p)).filter((d) => d);
+  const avgDuration = durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 5;
+  let cycleDay = null, daysToNext = null;
+  if (lastStart) {
+    cycleDay = Math.floor((startOfDay(now) - lastStart) / DAY) + 1;
+    const nextPeriodTs = lastStart + avgLength * DAY;
+    daysToNext = Math.round((nextPeriodTs - startOfDay(now)) / DAY);
   }
+  return { lastStart, avgLength, avgDuration, cycleDay, daysToNext, hasEnoughData: lengths.length >= 2 };
+}
 
-  let centerLabel, centerDate, centerSub;
-  if (periodRingOffset === 0) {
-    centerLabel = "Today";
-    centerDate = new Date(now).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-    centerSub = lastStart ? `Day ${Math.floor((startOfDay(now) - startOfDay(lastStart)) / DAY) + 1}` : "Not logged yet";
-  } else {
-    centerLabel = monthLabel.split(" ")[0];
-    centerDate = year;
-    centerSub = loggedThisMonth > 0 ? `${loggedThisMonth} logged` : "Nothing logged";
-  }
+function periodDonutHtml(now) {
+  const info = periodPhaseInfo(now);
+  const size = 260, center = size / 2, strokeW = 22, r = center - strokeW / 2 - 6;
+  const circumference = 2 * Math.PI * r;
 
-  return `
-    <div class="ring-wrap">
-      <div class="cal-header" style="max-width:300px;margin:0 auto 4px;">
-        <button class="cal-nav" onclick="changePeriodMonth(-1)" aria-label="Previous month">‹</button>
-        <p class="section-title" style="margin:0;">${monthLabel}</p>
-        <button class="cal-nav" onclick="changePeriodMonth(1)" aria-label="Next month">›</button>
-      </div>
-      <div class="ring" style="width:${size}px;height:${size}px;">
-        ${nodes}
-        <div class="ring-center">
-          <p class="ring-center-label">${centerLabel}</p>
-          <p class="ring-center-date display">${centerDate}</p>
-          <p class="ring-center-sub">${centerSub}</p>
+  if (!info.lastStart) {
+    return `
+      <div class="ring-wrap" style="text-align:center;">
+        <div style="position:relative;width:${size}px;height:${size}px;margin:0 auto;">
+          <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+            <circle cx="${center}" cy="${center}" r="${r}" fill="none" stroke="var(--line)" stroke-width="${strokeW}" />
+          </svg>
+          <div class="ring2-center">
+            <p class="hero-secondary" style="max-width:150px;">Log your first period below to see your cycle here</p>
+          </div>
         </div>
       </div>
-      <div class="ring-stats">
-        <div><p class="ring-stat-num mono">${loggedThisMonth}</p><p class="ring-stat-label">This month</p></div>
-        <div><p class="ring-stat-num mono">${avgLength || "–"}</p><p class="ring-stat-label">Avg cycle</p></div>
-        ${predictedNextTs ? `<div><p class="ring-stat-num mono" style="font-size:15px;">${formatDateShort(predictedNextTs)}</p><p class="ring-stat-label">Next predicted</p></div>` : ""}
+    `;
+  }
+
+  // Rough phase estimate from your average cycle — not a clinical prediction, and perimenopause cycles vary more than this picture shows.
+  const cycleLen = info.avgLength;
+  const menstrualEnd = Math.min(info.avgDuration, cycleLen);
+  const ovulationDay = cycleLen > 14 ? cycleLen - 14 : Math.max(1, Math.floor(cycleLen * 0.5));
+  const fertileStart = Math.max(menstrualEnd + 1, ovulationDay - 5);
+  const fertileEnd = Math.min(cycleLen, ovulationDay + 1);
+
+  const segments = [
+    { from: 1, to: menstrualEnd, color: "var(--terracotta)" },
+    { from: menstrualEnd + 1, to: fertileStart - 1, color: "var(--sage)" },
+    { from: fertileStart, to: fertileEnd, color: "var(--slate)" },
+    { from: fertileEnd + 1, to: cycleLen, color: "var(--rose)" },
+  ].filter((s) => s.to >= s.from);
+
+  const dayFrac = (d) => (d - 1) / cycleLen;
+  const arcs = segments.map((s) => {
+    const startFrac = dayFrac(s.from);
+    const endFrac = dayFrac(s.to + 1);
+    const len = (endFrac - startFrac) * circumference;
+    const offset = -startFrac * circumference;
+    return `<circle cx="${center}" cy="${center}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${strokeW}" stroke-dasharray="${len} ${circumference}" stroke-dashoffset="${offset}" transform="rotate(-90 ${center} ${center})" />`;
+  }).join("");
+
+  const clampedCycleDay = ((info.cycleDay - 1) % cycleLen + cycleLen) % cycleLen + 1;
+  const todayFrac = dayFrac(clampedCycleDay);
+  const todayAngle = todayFrac * 360 - 90;
+  const todayRad = (todayAngle * Math.PI) / 180;
+  const tx = center + r * Math.cos(todayRad);
+  const ty = center + r * Math.sin(todayRad);
+
+  const daysToNextLabel = info.daysToNext > 0
+    ? `Next period in ${info.daysToNext} day${info.daysToNext === 1 ? "" : "s"}`
+    : info.daysToNext === 0
+      ? "Period due today"
+      : `${Math.abs(info.daysToNext)} day${Math.abs(info.daysToNext) === 1 ? "" : "s"} late`;
+
+  return `
+    <div class="ring-wrap" style="text-align:center;">
+      <div style="position:relative;width:${size}px;height:${size}px;margin:0 auto;">
+        <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+          <circle cx="${center}" cy="${center}" r="${r}" fill="none" stroke="var(--line)" stroke-width="${strokeW}" />
+          ${arcs}
+          <circle cx="${tx}" cy="${ty}" r="6" fill="#fff" stroke="var(--ink)" stroke-width="2.5" />
+        </svg>
+        <div class="ring2-center">
+          <p class="mono" style="font-size:10px;color:var(--muted);margin:0;text-transform:uppercase;letter-spacing:0.06em;">Cycle day</p>
+          <p class="display" style="font-size:34px;margin:2px 0;">${clampedCycleDay}</p>
+          <p class="mono" style="font-size:11px;color:var(--muted);margin:0;">of ${cycleLen}</p>
+        </div>
       </div>
-      ${!predictedNextTs ? `<p style="font-size:11px;color:var(--muted);text-align:center;margin:8px 2px 0;">Log a few more periods to see a predicted next date.</p>` : ""}
+      <p class="badge mono" style="display:inline-block;margin-top:14px;background:var(--rose);color:#fff;padding:7px 16px;border-radius:999px;font-size:13px;">${daysToNextLabel}</p>
+      <div class="cal-legend" style="justify-content:center;margin-top:14px;">
+        <span><span class="cal-dot" style="background:var(--terracotta);"></span>Period</span>
+        <span><span class="cal-dot" style="background:var(--sage);"></span>Follicular</span>
+        <span><span class="cal-dot" style="background:var(--slate);"></span>Fertile window</span>
+        <span><span class="cal-dot" style="background:var(--rose);"></span>Luteal</span>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin-top:10px;">${info.hasEnoughData ? "An estimate based on your average cycle" : "Estimated from a single cycle so far — log a couple more for a steadier picture"} — perimenopause cycles can vary, so treat this as a rough guide, not exact.</p>
     </div>
   `;
 }
@@ -549,8 +553,20 @@ function periodTabHtml(now) {
 
   return `
     <div class="card" style="margin-bottom:20px;">
-      ${periodRingHtml(now)}
+      ${periodDonutHtml(now)}
       <button class="btn" style="background:var(--sage);margin-top:16px;" onclick="logPeriod()">Log period started today</button>
+      ${showLogPeriodDate ? `
+        <div class="row" style="background:#E4E9E2;flex-direction:column;align-items:stretch;gap:8px;margin-top:10px;border-radius:10px;padding:10px;">
+          <div class="field-row">
+            <span class="field-label">Period started on</span>
+            <input type="date" id="period-date-input" value="${new Date(now).toISOString().slice(0, 10)}" />
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-cancel" style="flex:1;border-radius:8px;padding:8px;font-size:12px;" onclick="toggleLogPeriodDate()">Cancel</button>
+            <button class="btn-submit" style="flex:1;border-radius:8px;padding:8px;font-size:12px;" onclick="saveLogPeriodDate()">Save</button>
+          </div>
+        </div>
+      ` : `<button class="backup-link" style="display:block;text-align:center;margin:10px auto 0;" onclick="toggleLogPeriodDate()">Log a different date</button>`}
     </div>
     <div class="section">
       <p class="section-title" style="color:var(--sage);">Cycle length</p>
@@ -561,6 +577,20 @@ function periodTabHtml(now) {
       ${rows || `<p style="font-size:13px;color:var(--muted);padding:0 2px;">Nothing logged yet.</p>`}
     </div>
   `;
+}
+
+function toggleLogPeriodDate() {
+  showLogPeriodDate = !showLogPeriodDate;
+  render();
+}
+
+function saveLogPeriodDate() {
+  const input = document.getElementById("period-date-input");
+  const raw = input ? input.value : "";
+  if (!raw) { render(); return; }
+  const ts = startOfDay(new Date(raw + "T00:00:00").getTime());
+  togglePeriodDay(ts);
+  showLogPeriodDate = false;
 }
 
 function logPeriod() {
@@ -793,6 +823,65 @@ function heroPriority(info) {
   return 4; // waiting / upcoming / unset
 }
 
+function routineSummaryHtml(now) {
+  if (items.length === 0) return "";
+  const rows = items.map((it) => {
+    const info = getInfo(it, now);
+    let dotColor, label;
+    if (it.scheduleType === "cycle") {
+      if (info.state === "active") {
+        dotColor = "var(--slate)";
+        label = `Day ${info.courseDay} of ${it.pillDuration}${info.takenToday ? " · taken today" : ""}`;
+      } else if (info.state === "complete") {
+        dotColor = "var(--rose)";
+        label = "Course complete";
+      } else if (info.state === "waiting") {
+        dotColor = "var(--line)";
+        label = `Starts ${formatDateShort(info.nextStartTs)}`;
+      } else {
+        dotColor = "var(--line)";
+        label = "Not started yet";
+      }
+    } else {
+      if (info.state === "overdue") {
+        dotColor = "var(--terracotta)";
+        label = "Overdue";
+      } else if (info.state === "today") {
+        dotColor = "var(--terracotta)";
+        label = "Due today";
+      } else if (info.state === "upcoming") {
+        dotColor = "var(--line)";
+        label = `Due ${formatDateShort(info.dueTs)}`;
+      } else {
+        dotColor = "var(--line)";
+        label = "Not set up yet";
+      }
+    }
+    return `
+      <div class="row" style="padding:10px 2px;">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+          <span class="cal-dot" style="width:11px;height:11px;flex-shrink:0;background:${dotColor};"></span>
+          <p class="row-name" style="margin:0;">${esc(it.name)}</p>
+        </div>
+        <p class="row-sub mono" style="color:var(--muted);margin:0;white-space:nowrap;">${label}</p>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div class="section">
+      <p class="section-title" style="color:var(--sage);">Routine at a glance</p>
+      <div class="card" style="padding:4px 14px;">${rows}</div>
+      <div class="cal-legend" style="margin-top:8px;padding:0 2px;">
+        <span><span class="cal-dot" style="background:var(--terracotta);"></span>Due / overdue</span>
+        <span><span class="cal-dot" style="background:var(--slate);"></span>In progress</span>
+        <span><span class="cal-dot" style="background:var(--rose);"></span>Complete</span>
+        <span><span class="cal-dot" style="background:var(--line);"></span>Not due yet</span>
+      </div>
+    </div>
+  `;
+}
+
 function render() {
   const now = Date.now();
   const withInfo = items.map((it) => ({ item: it, info: getInfo(it, now) }));
@@ -834,6 +923,8 @@ function render() {
         <p>Add a patch or pill below to get started.</p>
       </div>
     `;
+
+    html += routineSummaryHtml(now);
 
     html += sectionHtml("Patches", "#59705B", patches, now, hero ? hero.item.id : null);
     html += sectionHtml("Pills", "#9AAEA3", pills, now, hero ? hero.item.id : null);
