@@ -771,10 +771,25 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+function heroPriority(info) {
+  // Lower number = more claim on the top-of-screen hero spot.
+  // An overdue or due-today patch/pill must always outrank a routine "still on course" pill message —
+  // otherwise an overdue patch gets buried behind the progesterone course for days at a time.
+  if (info.state === "overdue") return 0;
+  if (info.state === "today") return 1;
+  if (info.state === "active") return 2;
+  if (info.state === "complete") return 3;
+  return 4; // waiting / upcoming / unset
+}
+
 function render() {
   const now = Date.now();
   const withInfo = items.map((it) => ({ item: it, info: getInfo(it, now) }));
-  const sorted = [...withInfo].sort((a, b) => a.info.sortTs - b.info.sortTs);
+  const sorted = [...withInfo].sort((a, b) => {
+    const pa = heroPriority(a.info), pb = heroPriority(b.info);
+    if (pa !== pb) return pa - pb;
+    return a.info.sortTs - b.info.sortTs;
+  });
   const hero = sorted[0];
   const patches = sorted.filter((x) => x.item.type === "patch");
   const pills = sorted.filter((x) => x.item.type === "pill");
@@ -821,7 +836,13 @@ function render() {
 
   if (showBackup) html += backupModalHtml();
 
+  // Every tap rebuilds the whole screen, and items reorder themselves by urgency —
+  // so without this, the page silently jumps back to the top on every single interaction.
+  // Keep you exactly where you were scrolled to, unless setTab() deliberately asks for the top.
+  const scrollY = window.scrollY;
   document.getElementById("app").innerHTML = html;
+  window.scrollTo(0, scrollY);
+  requestAnimationFrame(() => window.scrollTo(0, scrollY));
 }
 
 function openEditTitle() {
@@ -847,6 +868,8 @@ function saveEditTitle() {
 function setTab(t) {
   activeTab = t;
   render();
+  window.scrollTo(0, 0);
+  requestAnimationFrame(() => window.scrollTo(0, 0));
 }
 
 function dayChecklistHtml(item, now) {
@@ -867,7 +890,8 @@ function dayChecklistHtml(item, now) {
     const checked = history.some((h) => h.itemId === item.id && h.date === key);
     const isFuture = dayTs > now;
     const style = checked ? `background:var(--slate);color:#fff;border-color:var(--slate);` : (d > item.pillDuration ? `border-color:var(--terracotta);` : "");
-    chips += `<button class="day-chip" style="${style}" ${isFuture ? "disabled style=\"opacity:0.35;\"" : `onclick="toggleCycleDay('${item.id}', ${d})"`}>${d}</button>`;
+    const dateLabel = new Date(dayTs).getDate();
+    chips += `<button class="day-chip" style="${style}" title="${formatDateShort(dayTs)}" ${isFuture ? "disabled style=\"opacity:0.35;\"" : `onclick="toggleCycleDay('${item.id}', ${d})"`}>${checked ? "✓" : dateLabel}</button>`;
   }
   return `<div class="day-chip-row">${chips}</div>`;
 }
@@ -1124,11 +1148,11 @@ function patchRingHtml(item, now) {
       const key = localDateKey(ts);
       const done = history.some((hh) => hh.itemId === item.id && hh.date === key);
       const isFuture = ts > now;
-      let bg = "#fff", border = "var(--line)", color = "var(--muted)", content = i + 1;
+      let bg = "#fff", border = "var(--line)", color = "var(--muted)", content = new Date(dayStart).getDate();
       if (done) { bg = "var(--rose)"; border = "var(--rose)"; color = "#fff"; content = "✓"; }
       else if (!isFuture) { border = "var(--terracotta)"; color = "var(--terracotta)"; }
       else { color = "var(--dim)"; }
-      nodes += `<button class="ring-day" style="left:${x}px;top:${y}px;background:${bg};border-color:${border};color:${color};" ${isFuture ? "disabled" : `onclick="toggleWeekdayOccurrence('${item.id}', ${ts})"`}>${content}</button>`;
+      nodes += `<button class="ring-day" style="left:${x}px;top:${y}px;background:${bg};border-color:${border};color:${color};" title="${formatDateShort(ts)}" ${isFuture ? "disabled" : `onclick="toggleWeekdayOccurrence('${item.id}', ${ts})"`}>${content}</button>`;
     });
 
     const rangeStart = blockDates[0];
@@ -1302,7 +1326,8 @@ function toggleWeekdayOccurrence(id, ts) {
   } else {
     history.push({ date: key, type: item.type, name: item.name, itemId: id });
     if (!item.lastDone || ts > new Date(item.lastDone).getTime()) {
-      items = items.map((it) => it.id === id ? { ...it, lastDone: new Date(ts).toISOString() } : it);
+      // Logging the newest change for this patch — flip the side automatically, same as the main button does.
+      items = items.map((it) => it.id === id ? { ...it, lastDone: new Date(ts).toISOString(), site: it.site ? (it.site === "left" ? "right" : "left") : it.site } : it);
       save();
     }
   }
@@ -1663,7 +1688,7 @@ function saveMissedDay(id) {
   }
 
   if (!item.lastDone || ts > new Date(item.lastDone).getTime()) {
-    items = items.map((it) => it.id === id ? { ...it, lastDone: new Date(ts).toISOString() } : it);
+    items = items.map((it) => it.id === id ? { ...it, lastDone: new Date(ts).toISOString(), site: it.site ? (it.site === "left" ? "right" : "left") : it.site } : it);
     save();
   }
 
