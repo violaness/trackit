@@ -130,7 +130,7 @@
   .ring-center-sub { font-size: 12px; color: var(--sage); margin: 0; }
   .ring-stats { display: flex; border: 1px solid var(--line); border-radius: 12px; margin-top: 16px; overflow: hidden; }
   .ring-stats > div { flex: 1; text-align: center; padding: 10px; }
-  .ring-stats > div:first-child { border-right: 1px solid var(--line); }
+  .ring-stats > div:not(:last-child) { border-right: 1px solid var(--line); }
   .ring-stat-num { font-size: 18px; font-weight: 600; margin: 0; }
   .ring-stat-label { font-size: 10px; color: var(--muted); margin: 2px 0 0; text-transform: uppercase; letter-spacing: 0.04em; }
   .ring2-dot { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); }
@@ -210,6 +210,8 @@ let calendarOffset = 0;
 let patchCycleOffset = 0;
 let editingCycleId = null;
 let editingDurationFor = null;
+let editingPillSettingsId = null;
+let viewHistoryId = null;
 let periodRingOffset = 0;
 let activeTab = "tracker";
 let appTitle = storageGet("hrt-tracker-title") || "Keeping You Level";
@@ -329,11 +331,27 @@ function getInfo(item, now) {
     const cycleDay = daysIntoCycle + 1;
     const windowStart = item.pillStartDay;
     const windowEnd = item.pillStartDay + item.pillDuration - 1;
-    const inWindow = cycleDay >= windowStart && cycleDay <= windowEnd;
+    const windowStartTs = cycleAnchorTs + (windowStart - 1) * DAY;
     const windowEndTs = cycleAnchorTs + (windowEnd - 1) * DAY;
+
+    const nominalInWindow = cycleDay >= windowStart && cycleDay <= windowEnd;
+    const windowStartKey = localDateKey(windowStartTs);
+    const todayKey = localDateKey(now);
+    const dosesSoFar = history.filter((h) => h.itemId === item.id && h.date >= windowStartKey && h.date <= todayKey).length;
+    const runningBehind = !nominalInWindow && cycleDay > windowEnd && cycleDay < windowEnd + 14 && dosesSoFar < item.pillDuration;
+    const inWindow = nominalInWindow || runningBehind;
+
+    // Course just finished (either right on schedule, or today if it was caught up after running behind) —
+    // give a brief "complete" acknowledgement before switching to the countdown for the next cycle.
+    const finishedToday = item.lastDone && dateOnlyStr(item.lastDone) === dateOnlyStr(now) && dosesSoFar >= item.pillDuration;
+    const justFinished = !inWindow && dosesSoFar >= item.pillDuration && (cycleDay === windowEnd + 1 || finishedToday);
+    if (justFinished) {
+      return { state: "complete", windowEndTs, dosesSoFar, sortTs: -1 };
+    }
+
     if (inWindow) {
       const takenToday = item.lastDone && dateOnlyStr(item.lastDone) === dateOnlyStr(now);
-      return { state: "active", courseDay: cycleDay - windowStart + 1, windowEndTs, takenToday, sortTs: -1 };
+      return { state: "active", courseDay: cycleDay - windowStart + 1, windowEndTs, takenToday, extended: runningBehind, dosesSoFar, sortTs: -1 };
     }
     const nextStartTs = (cycleDay < windowStart
       ? cycleAnchorTs + (windowStart - 1) * DAY
@@ -415,6 +433,11 @@ function periodRingHtml(now) {
   const lastStart = sortedDesc[0] ? new Date(periodStart(sortedDesc[0])).getTime() : null;
   const lengths = cycleLengthsChrono();
   const avgLength = lengths.length > 0 ? Math.round(lengths.reduce((a, b) => a + b, 0) / lengths.length) : null;
+  // Only predict once a few cycles have actually been logged (3+ periods) — a prediction off one cycle is just noise.
+  const predictedNextTs = (lastStart && avgLength && lengths.length >= 2)
+    ? startOfDay(lastStart) + avgLength * DAY
+    : null;
+  const predictedKey = predictedNextTs ? localDateKey(predictedNextTs) : null;
   const loggedThisMonth = periods.filter((p) => {
     const d2 = new Date(periodStart(p));
     return d2.getFullYear() === year && d2.getMonth() === month;
@@ -444,7 +467,11 @@ function periodRingHtml(now) {
     } else if (inSpan) {
       nodes += `<span class="ring-day" style="left:${x}px;top:${y}px;background:#BBBB9A80;border-color:transparent;color:#fff;display:flex;align-items:center;justify-content:center;position:absolute;width:28px;height:28px;border-radius:50%;transform:translate(-50%,-50%);font-size:11px;">${day}</span>`;
     } else if (isFuture) {
-      nodes += `<span class="ring-label" style="left:${x}px;top:${y}px;">${day}</span>`;
+      if (key === predictedKey) {
+        nodes += `<span class="ring-label" style="left:${x}px;top:${y}px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--sage);border-radius:50%;color:var(--sage);font-weight:600;" title="Predicted next period">${day}</span>`;
+      } else {
+        nodes += `<span class="ring-label" style="left:${x}px;top:${y}px;">${day}</span>`;
+      }
     } else {
       nodes += `<button class="ring-day" style="left:${x}px;top:${y}px;background:#fff;border-color:var(--line);color:var(--muted);${isToday ? "font-weight:700;" : ""}" onclick="togglePeriodDay(${dayStart})">${day}</button>`;
     }
@@ -479,7 +506,9 @@ function periodRingHtml(now) {
       <div class="ring-stats">
         <div><p class="ring-stat-num mono">${loggedThisMonth}</p><p class="ring-stat-label">This month</p></div>
         <div><p class="ring-stat-num mono">${avgLength || "–"}</p><p class="ring-stat-label">Avg cycle</p></div>
+        ${predictedNextTs ? `<div><p class="ring-stat-num mono" style="font-size:15px;">${formatDateShort(predictedNextTs)}</p><p class="ring-stat-label">Next predicted</p></div>` : ""}
       </div>
+      ${!predictedNextTs ? `<p style="font-size:11px;color:var(--muted);text-align:center;margin:8px 2px 0;">Log a few more periods to see a predicted next date.</p>` : ""}
     </div>
   `;
 }
@@ -753,10 +782,25 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+function heroPriority(info) {
+  // Lower number = more claim on the top-of-screen hero spot.
+  // An overdue or due-today patch/pill must always outrank a routine "still on course" pill message —
+  // otherwise an overdue patch gets buried behind the progesterone course for days at a time.
+  if (info.state === "overdue") return 0;
+  if (info.state === "today") return 1;
+  if (info.state === "active") return 2;
+  if (info.state === "complete") return 3;
+  return 4; // waiting / upcoming / unset
+}
+
 function render() {
   const now = Date.now();
   const withInfo = items.map((it) => ({ item: it, info: getInfo(it, now) }));
-  const sorted = [...withInfo].sort((a, b) => a.info.sortTs - b.info.sortTs);
+  const sorted = [...withInfo].sort((a, b) => {
+    const pa = heroPriority(a.info), pb = heroPriority(b.info);
+    if (pa !== pb) return pa - pb;
+    return a.info.sortTs - b.info.sortTs;
+  });
   const hero = sorted[0];
   const patches = sorted.filter((x) => x.item.type === "patch");
   const pills = sorted.filter((x) => x.item.type === "pill");
@@ -803,7 +847,13 @@ function render() {
 
   if (showBackup) html += backupModalHtml();
 
+  // Every tap rebuilds the whole screen, and items reorder themselves by urgency —
+  // so without this, the page silently jumps back to the top on every single interaction.
+  // Keep you exactly where you were scrolled to, unless setTab() deliberately asks for the top.
+  const scrollY = window.scrollY;
   document.getElementById("app").innerHTML = html;
+  window.scrollTo(0, scrollY);
+  requestAnimationFrame(() => window.scrollTo(0, scrollY));
 }
 
 function openEditTitle() {
@@ -829,6 +879,8 @@ function saveEditTitle() {
 function setTab(t) {
   activeTab = t;
   render();
+  window.scrollTo(0, 0);
+  requestAnimationFrame(() => window.scrollTo(0, 0));
 }
 
 function dayChecklistHtml(item, now) {
@@ -841,14 +893,16 @@ function dayChecklistHtml(item, now) {
   const daysIntoCycle = ((daysSince % item.cycleLength) + item.cycleLength) % item.cycleLength;
   const cycleAnchorTs = startOfDay(now) - daysIntoCycle * DAY;
 
+  const totalChips = info.extended ? Math.max(item.pillDuration, info.courseDay) : item.pillDuration;
   let chips = "";
-  for (let d = 1; d <= item.pillDuration; d++) {
+  for (let d = 1; d <= totalChips; d++) {
     const dayTs = cycleAnchorTs + (item.pillStartDay - 1 + (d - 1)) * DAY;
     const key = localDateKey(dayTs);
     const checked = history.some((h) => h.itemId === item.id && h.date === key);
     const isFuture = dayTs > now;
-    const style = checked ? `background:var(--slate);color:#fff;border-color:var(--slate);` : "";
-    chips += `<button class="day-chip" style="${style}" ${isFuture ? "disabled style=\"opacity:0.35;\"" : `onclick="toggleCycleDay('${item.id}', ${d})"`}>${d}</button>`;
+    const style = checked ? `background:var(--slate);color:#fff;border-color:var(--slate);` : (d > item.pillDuration ? `border-color:var(--terracotta);` : "");
+    const dateLabel = new Date(dayTs).getDate();
+    chips += `<button class="day-chip" style="${style}" title="${formatDateShort(dayTs)}" ${isFuture ? "disabled style=\"opacity:0.35;\"" : `onclick="toggleCycleDay('${item.id}', ${d})"`}>${checked ? "✓" : dateLabel}</button>`;
   }
   return `<div class="day-chip-row">${chips}</div>`;
 }
@@ -971,6 +1025,118 @@ function clearCycleSettings(id) {
   render();
 }
 
+function openPillSettings(id) {
+  editingPillSettingsId = id;
+  render();
+}
+
+function cancelPillSettings() {
+  editingPillSettingsId = null;
+  render();
+}
+
+function savePillSettings(id) {
+  const cycleLenInput = document.getElementById("pill-cyclelen-" + id);
+  const cycleStartInput = document.getElementById("pill-cyclestart-" + id);
+  const startDayInput = document.getElementById("pill-startday-" + id);
+  const durationInput = document.getElementById("pill-duration-" + id);
+  const timeInput = document.getElementById("pill-time-" + id);
+  if (!cycleStartInput || !cycleStartInput.value) { editingPillSettingsId = null; render(); return; }
+
+  const cycleLength = cycleLenInput && Number(cycleLenInput.value) > 0 ? Number(cycleLenInput.value) : 28;
+  const pillStartDay = startDayInput && Number(startDayInput.value) > 0 ? Number(startDayInput.value) : 15;
+  const pillDuration = durationInput && Number(durationInput.value) > 0 ? Number(durationInput.value) : 12;
+  const pillTime = timeInput && timeInput.value ? timeInput.value : "20:00";
+
+  items = items.map((it) => it.id === id ? {
+    ...it,
+    cycleLength,
+    cycleStart: new Date(cycleStartInput.value).getTime(),
+    pillStartDay,
+    pillDuration,
+    pillTime,
+  } : it);
+  save();
+  editingPillSettingsId = null;
+  render();
+}
+
+function pillSettingsHtml(item) {
+  if (item.scheduleType !== "cycle") return "";
+  if (editingPillSettingsId !== item.id) {
+    return `<button class="backup-link" style="display:block;text-align:center;margin:12px auto 0;" onclick="openPillSettings('${item.id}')">Adjust course settings</button>`;
+  }
+  return `
+    <div style="max-width:300px;margin:12px auto 0;text-align:left;">
+      <div class="field-row" style="margin-bottom:8px;">
+        <span class="field-label">Cycle length (days)</span>
+        <input type="number" min="1" id="pill-cyclelen-${item.id}" value="${item.cycleLength}" style="width:64px;" />
+      </div>
+      <div class="field-row" style="margin-bottom:8px;">
+        <span class="field-label">Day 1 of current cycle</span>
+        <input type="date" id="pill-cyclestart-${item.id}" value="${new Date(item.cycleStart).toISOString().slice(0, 10)}" />
+      </div>
+      <div class="field-row" style="margin-bottom:8px;">
+        <span class="field-label">Start pills on day</span>
+        <input type="number" min="1" id="pill-startday-${item.id}" value="${item.pillStartDay}" style="width:64px;" />
+      </div>
+      <div class="field-row" style="margin-bottom:8px;">
+        <span class="field-label">Take for how many days</span>
+        <input type="number" min="1" id="pill-duration-${item.id}" value="${item.pillDuration}" style="width:64px;" />
+      </div>
+      <div class="field-row" style="margin-bottom:8px;">
+        <span class="field-label">Usual time</span>
+        <input type="time" id="pill-time-${item.id}" value="${item.pillTime}" />
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-cancel" style="flex:1;border-radius:8px;padding:9px;font-size:13px;" onclick="cancelPillSettings()">Cancel</button>
+        <button class="btn-submit" style="flex:1;border-radius:8px;padding:9px;font-size:13px;" onclick="savePillSettings('${item.id}')">Save</button>
+      </div>
+    </div>
+  `;
+}
+
+function toggleViewHistory(id) {
+  viewHistoryId = viewHistoryId === id ? null : id;
+  render();
+}
+
+function deleteHistoryEntry(id, date) {
+  history = history.filter((h) => !(h.itemId === id && h.date === date));
+  saveHistory();
+
+  const remaining = history.filter((h) => h.itemId === id).map((h) => h.date).sort();
+  const newLastDoneKey = remaining.length ? remaining[remaining.length - 1] : null;
+  items = items.map((it) => it.id === id
+    ? { ...it, lastDone: newLastDoneKey ? new Date(newLastDoneKey + "T12:00:00").toISOString() : null }
+    : it
+  );
+  save();
+  render();
+}
+
+function historyListHtml(item) {
+  const entries = history.filter((h) => h.itemId === item.id).sort((a, b) => b.date.localeCompare(a.date));
+
+  if (viewHistoryId !== item.id) {
+    return `<button class="backup-link" style="display:block;text-align:center;margin:10px auto 0;" onclick="toggleViewHistory('${item.id}')">View history (${entries.length})</button>`;
+  }
+
+  const rows = entries.length ? entries.map((h) => `
+    <div class="row" style="padding:8px 12px;margin-bottom:6px;">
+      <p class="row-name mono" style="font-size:13px;">${formatDateShort(new Date(h.date + "T12:00:00").getTime())}</p>
+      <button class="icon-btn" style="color:var(--dim);" onclick="deleteHistoryEntry('${item.id}', '${h.date}')" aria-label="Delete entry">✕</button>
+    </div>
+  `).join("") : `<p style="font-size:12px;color:var(--muted);text-align:center;padding:8px 0;">Nothing logged yet.</p>`;
+
+  return `
+    <div style="max-width:300px;margin:10px auto 0;">
+      ${rows}
+      <button class="backup-link" style="display:block;text-align:center;margin:4px auto 0;" onclick="toggleViewHistory('${item.id}')">Hide history</button>
+    </div>
+  `;
+}
+
 function patchRingHtml(item, now) {
   if (item.scheduleType !== "weekdays") return "";
   const size = 300, center = size / 2, R = 112, rPill = 138;
@@ -993,11 +1159,11 @@ function patchRingHtml(item, now) {
       const key = localDateKey(ts);
       const done = history.some((hh) => hh.itemId === item.id && hh.date === key);
       const isFuture = ts > now;
-      let bg = "#fff", border = "var(--line)", color = "var(--muted)", content = i + 1;
+      let bg = "#fff", border = "var(--line)", color = "var(--muted)", content = new Date(dayStart).getDate();
       if (done) { bg = "var(--rose)"; border = "var(--rose)"; color = "#fff"; content = "✓"; }
       else if (!isFuture) { border = "var(--terracotta)"; color = "var(--terracotta)"; }
       else { color = "var(--dim)"; }
-      nodes += `<button class="ring-day" style="left:${x}px;top:${y}px;background:${bg};border-color:${border};color:${color};" ${isFuture ? "disabled" : `onclick="toggleWeekdayOccurrence('${item.id}', ${ts})"`}>${content}</button>`;
+      nodes += `<button class="ring-day" style="left:${x}px;top:${y}px;background:${bg};border-color:${border};color:${color};" title="${formatDateShort(ts)}" ${isFuture ? "disabled" : `onclick="toggleWeekdayOccurrence('${item.id}', ${ts})"`}>${content}</button>`;
     });
 
     const rangeStart = blockDates[0];
@@ -1171,7 +1337,8 @@ function toggleWeekdayOccurrence(id, ts) {
   } else {
     history.push({ date: key, type: item.type, name: item.name, itemId: id });
     if (!item.lastDone || ts > new Date(item.lastDone).getTime()) {
-      items = items.map((it) => it.id === id ? { ...it, lastDone: new Date(ts).toISOString() } : it);
+      // Logging the newest change for this patch — flip the side automatically, same as the main button does.
+      items = items.map((it) => it.id === id ? { ...it, lastDone: new Date(ts).toISOString(), site: it.site ? (it.site === "left" ? "right" : "left") : it.site } : it);
       save();
     }
   }
@@ -1187,9 +1354,15 @@ function heroHtml(entry, now) {
 
   if (info.state === "unset") {
     primary = "Not started"; secondary = "Log your first dose to start tracking";
+  } else if (info.state === "complete") {
+    primary = "Course complete";
+    secondary = `All ${item.pillDuration} doses logged`;
+    buttonLabel = null;
   } else if (info.state === "active") {
     primary = `Day ${info.courseDay} of ${item.pillDuration}`;
-    secondary = `Course runs through ${formatDateShort(info.windowEndTs)}`;
+    secondary = info.extended
+      ? `Running a few days behind — ${Math.max(item.pillDuration - info.dosesSoFar, 0)} dose${item.pillDuration - info.dosesSoFar === 1 ? "" : "s"} still needed`
+      : `Course runs through ${formatDateShort(info.windowEndTs)}`;
     buttonLabel = info.takenToday ? "Taken today ✓" : "Mark taken today";
   } else if (info.state === "waiting") {
     primary = formatCountdown(info.nextStartTs - now);
@@ -1211,6 +1384,8 @@ function heroHtml(entry, now) {
       <p class="hero-secondary">${secondary}</p>
       ${dayChecklistHtml(item, now)}
       ${patchRingHtml(item, now)}
+      ${pillSettingsHtml(item)}
+      ${historyListHtml(item)}
       ${editingId === item.id ? `
         <p class="hero-secondary" style="margin-top:14px;color:var(--sage);">↓ Editing the time for this below</p>
       ` : `
@@ -1227,6 +1402,7 @@ function sectionHtml(title, color, entries, now, heroId) {
     const statusColor = info.state === "overdue" ? "var(--terracotta)" : (info.state === "today" || info.state === "active") ? "var(--rose)" : info.state === "unset" ? "var(--dim)" : "var(--sage)";
     let sub;
     if (info.state === "unset") sub = "not started";
+    else if (info.state === "complete") sub = "course complete";
     else if (info.state === "active") sub = `day ${info.courseDay} of ${item.pillDuration}`;
     else if (info.state === "waiting") sub = "starts " + formatCountdown(info.nextStartTs - now);
     else sub = formatCountdown(info.dueTs - now);
@@ -1250,6 +1426,7 @@ function sectionHtml(title, color, entries, now, heroId) {
       </div>
       ${item.scheduleType === "cycle" && info.state === "active" && !isHero ? `<div class="row" style="border-top:none;padding-top:0;justify-content:center;">${dayChecklistHtml(item, now)}</div>` : ""}
       ${item.scheduleType === "weekdays" && !isHero ? `<div class="row" style="border-top:none;padding-top:0;justify-content:center;">${patchRingHtml(item, now)}</div>` : ""}
+      ${item.scheduleType === "cycle" && !isHero ? `<div class="row" style="border-top:none;padding-top:0;flex-direction:column;align-items:stretch;">${pillSettingsHtml(item)}${historyListHtml(item)}</div>` : ""}
       ${editingNameId === item.id ? `
         <div class="row" style="background:#E4E9E2;flex-direction:column;align-items:stretch;gap:8px;">
           <input type="text" id="edit-name-${item.id}" value="${esc(item.name)}" class="full" />
@@ -1410,12 +1587,19 @@ function markDone(id) {
   const now = Date.now();
   const info = getInfo(target, now);
   const effectiveTs = (info.state === "overdue" && info.dueTs) ? info.dueTs : now;
+  const key = localDateKey(effectiveTs);
+
+  // Already logged for this date — don't create a second record for an accidental double-tap.
+  if (history.some((h) => h.itemId === id && h.date === key)) {
+    render();
+    return;
+  }
 
   items = items.map((it) => it.id === id
     ? { ...it, lastDone: new Date(effectiveTs).toISOString(), site: it.site ? (it.site === "left" ? "right" : "left") : null, _prevLastDone: it.lastDone || null, _prevSite: it.site || null, _actionAt: now }
     : it
   );
-  history.push({ date: localDateKey(effectiveTs), type: target.type, name: target.name, itemId: id });
+  history.push({ date: key, type: target.type, name: target.name, itemId: id });
   saveHistory();
   save();
   render();
@@ -1515,7 +1699,7 @@ function saveMissedDay(id) {
   }
 
   if (!item.lastDone || ts > new Date(item.lastDone).getTime()) {
-    items = items.map((it) => it.id === id ? { ...it, lastDone: new Date(ts).toISOString() } : it);
+    items = items.map((it) => it.id === id ? { ...it, lastDone: new Date(ts).toISOString(), site: it.site ? (it.site === "left" ? "right" : "left") : it.site } : it);
     save();
   }
 
