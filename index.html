@@ -506,6 +506,7 @@ function periodDonutHtml(now) {
         </div>
       </div>
       <p class="badge mono" style="display:inline-block;margin-top:14px;background:var(--rose);color:#fff;padding:7px 16px;border-radius:999px;font-size:13px;">${daysToNextLabel}</p>
+      <p style="font-size:14px;color:var(--ink);margin:8px 0 0;">Expected ${new Date(info.lastStart + info.avgLength * DAY + 12 * 60 * 60 * 1000).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</p>
       <div class="cal-legend" style="justify-content:center;margin-top:14px;">
         <span><span class="cal-dot" style="background:var(--terracotta);"></span>Period</span>
         <span><span class="cal-dot" style="background:var(--sage);"></span>Follicular</span>
